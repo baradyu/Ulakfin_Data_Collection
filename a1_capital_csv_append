@@ -1,0 +1,111 @@
+def a1capital():
+    # -----------IMPORTS----------#
+    from selenium.webdriver.chrome.options import Options
+    import pandas as pd
+    from selenium import webdriver
+    import datetime
+    import csv
+
+    print('Modules imported')
+
+    DRIVER_PATH = 'C:/Users/berat/webdriver/chromedriver'  # BILGISAYARDA chromedriver'ın bulunduğu yer
+    options = Options()
+    options.headless = True
+    options.add_argument("--window-size=1920,1200")
+    driver = webdriver.Chrome(options=options, executable_path=DRIVER_PATH)
+
+    # -------------------Converting to readible date pattern
+    print('Converting to readible date pattern')
+    date = datetime.datetime.today().date()
+    day = str(date)[8:10]
+    month = str(date)[5:7]
+    if month == '01':
+        month1 = 'ocak'
+    if month == '02':
+        month1 = 'subat'
+    if month == '03':
+        month1 = 'mart'
+    if month == '04':
+        month1 = 'nisan'
+    if month == '05':
+        month1 = 'mayis'
+    if month == '06':
+        month1 = 'haziran'
+    if month == '07':
+        month1 = 'temmuz'
+    if month == '08':
+        month1 = 'agustos'
+    if month == '09':
+        month1 = 'eylul'
+    if month == '10':
+        month1 = 'ekim'
+    if month == '11':
+        month1 = 'kasim'
+    if month == '12':
+        month1 = 'aralik'
+    print('Converted to readible date pattern')
+
+    driver.get(f'https://a1capital.com.tr/{day}-{month1}-gunluk-bulten-3/')
+    lines1 = driver.find_elements_by_xpath('/html/body/div[1]/div/div/div[2]/div/article/div/div/div[1]/div/div'
+                                           '/div[2]/table[2]/tbody/tr[2]/td/table/tbody/tr')
+
+    codes = []
+    news = []
+    date_list = []
+    for row in lines1:
+        codes.append(row.find_element_by_xpath('./td[2]/p/b/span').text)
+        news.append(row.find_element_by_xpath('./td[4]/p/span').text)
+        date_list.append(datetime.datetime.today().date())
+
+    data1 = pd.DataFrame(list(zip(date_list, codes, news)))
+    data1.columns = ['date', 'code', 'sentiment']
+
+    codes = data1['code'].tolist()
+    news = data1['sentiment'].tolist()
+
+    news_last1 = []
+    codes_last1 = []
+    for i in range(0, len(codes)):
+        if 'BORSA' not in codes[i]:
+            codes_last1.append(codes[i])
+            news_last1.append(news[i])
+
+    codes = []
+    news = []
+    news_id = []
+    time = []
+    date_list = []
+    araci_kurum = []
+    news_index = 0
+    k = 0
+    for i in range(0, len(codes_last1)):
+        if ',' in codes_last1[i]:
+            for code in codes_last1[i].split(','):
+                codes.append(code.strip())
+                news.append(news_last1[i])
+                news_id.append(k)
+                time.append(datetime.datetime.today().now().time())
+                date_list.append((datetime.datetime.now().date()))
+                araci_kurum.append('A1 Capital')
+                print(f'Written news index: {news_index}')
+                news_index = news_index + 1
+                k = k + 1
+        else:
+            codes.append(codes_last1[i])
+            news.append(news_last1[i])
+            news_id.append(k)
+            time.append(datetime.datetime.today().now().time())
+            date_list.append((datetime.datetime.now().date()))
+            araci_kurum.append('A1 Capital')
+            print(f'Written news index: {news_index}')
+            news_index = news_index + 1
+            k = k + 1
+    data = pd.read_csv('C:/Users/berat/Ulakfin/Database/DATAs/MainDATA_written/mainDATA.csv')
+    last_row = len(data)
+    with open('C:/Users/berat/Ulakfin/Database/DATAs/MainDATA_written/mainDATA.csv', 'a', encoding='utf-8', newline="") as fp:
+        wr = csv.writer(fp)
+        for i in range(0,len(codes)):
+            csv_list = [last_row , date_list[i], codes[i], news[i], araci_kurum[i], time[i]]
+            print(csv_list)
+            last_row = last_row + 1
+            wr.writerow(csv_list)
