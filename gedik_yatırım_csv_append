@@ -1,0 +1,225 @@
+
+def gedik_yatirim(n=4):
+    # -----------IMPORTS----------#
+    import pandas as pd
+    import urllib.request
+    from selenium import webdriver
+    from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.support.ui import Select
+    from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
+    from pdfminer.pdfpage import PDFPage
+    from pdfminer.converter import TextConverter
+    from pdfminer.layout import LAParams
+    import io
+    import re
+    import time
+    import datetime
+    import openpyxl
+    import csv
+    print('Modules imported.')
+
+    DRIVER_PATH = 'C:/Users/berat/webdriver/chromedriver'  # BILGISAYARDA chromedriver'ın bulunduğu yer
+    options = Options()
+    options.headless = True
+    options.add_argument("--window-size=1920,1200")
+    driver = webdriver.Chrome(options=options, executable_path=DRIVER_PATH)
+
+    print('Webdriver is arrenged.')
+
+    print('Getting the url')
+    link = "https://www.gedik.com/piyasalar/butun-bultenler"
+    driver.get(link)
+    select = Select(driver.find_element_by_id('tags'))
+    select.select_by_visible_text('Günlük Bülten')
+    time.sleep(3)
+    print('We are on the website.')
+
+    href = driver.find_elements_by_xpath('//div/a')[n]  # -----------------------------------------------------------------
+    url = href.get_attribute("href")
+    pdf = 'gedik_yatırım_' + url.split('pdf')[0][-11:-1]
+    print('Downloading PDF to: C:/Users/berat/Ulakfin/Database/PDFs')
+    urllib.request.urlretrieve(url, f"C:/Users/berat/Ulakfin/Database/PDFs/{pdf}.pdf")
+    print('PDF is downloaded')
+
+    # PDF MINER FUNCTION
+    def pdf_to_text(path):
+        manager = PDFResourceManager()
+        retstr = io.StringIO()
+        layout = LAParams(all_texts=True)
+        device = TextConverter(manager, retstr, laparams=layout)
+        filepath = open(path, 'rb')
+        interpreter = PDFPageInterpreter(manager, device)
+        for page in PDFPage.get_pages(filepath, check_extractable=False):
+            interpreter.process_page(page)
+        text = retstr.getvalue()
+        filepath.close()
+        device.close()
+        retstr.close()
+        return text
+
+    # Getting the data between 'KAP Haberleri' and 'Veri Takvimi'
+    pdf_file = f"C:/Users/berat/Ulakfin/Database/PDFs/{pdf}.pdf"
+    sirket_haberleri_pattern = '(?<=KAP Haberleri).*?(?=Veri Takvimi)'
+    text_list = []
+    sirket_haber_list_1 = []
+    text_list.append(pdf_to_text(pdf_file))
+    for text in text_list:
+        sirket_haber_list_1.append(re.findall(sirket_haberleri_pattern, text, re.DOTALL))
+    text = sirket_haber_list_1[0][0]
+    text_splitted1 = text.split("\n")
+    text_splitted = []
+
+    # Deleting empty elements in our text's row list.
+
+    for row in text_splitted1:
+        if row != '' and row != ' ' and row != '  ' and row != '   ':
+            text_splitted.append(row)
+
+    # Deleting the unwanted informative lines.
+    text_splitted3 = []
+    for row in text_splitted:
+        if '*Kamuyu Aydınlatma  Platformu’na' not in row and 'gelen haberleri' not in row and \
+                'Şirket haberleri araştırm' not in row and '444 0 435' not in row and \
+                'ww.gedikyatirim.com.t' not in row and 'Günlük Bülten' not in row and \
+                'SPK  ve  BIST  kararıyla  Tedb' not in row and 'buradan ulaşabil' not in row:
+            text_splitted3.append(row)
+    text_splitted = text_splitted3
+
+    # Getting the elements with HH:MM::SS
+    pattern = re.compile(r'\d\d:\d\d:\d\d')
+    list1 = []
+    for row in text_splitted:
+        x = pattern.findall(row)
+        row = ' '.join([str(i) for i in x])
+        list1.append(row)
+    matcher = [x for x in list1 if x]
+
+    # Finding the rows with elements chosen above
+    matches2 = []
+    for row in text_splitted:
+        for match in matcher:
+            if match in row:
+                matches2.append(row)
+
+    # Rearranging the choosen rows if it is splitted. (Like, the pattern we used above is dropped to the next line)
+    """""
+    (Firm Name) / (Firm symbol).... DD.AA.YYYY
+    HH:MM:SS
+    """""
+    matches3 = []
+    for row in matches2:
+        if '/' not in row:
+            for i in range(0, len(text_splitted)):
+                if text_splitted[i] == row:
+                    a = text_splitted[i - 1]
+            b = a + row
+            matches3.append(b)
+        else:
+            matches3.append(row)
+
+    if sum(c.isdigit() for c in text_splitted[1]) == 8:
+        matches3.insert(0, text_splitted[1])
+
+    matches = matches3
+
+    # Arranging the rows if there is multiple firms with the same news
+    multiple1 = []
+    for i in range(0, len(matches)):
+        if '/' not in matches[i]:
+            multiple1.append(matches[i])
+
+    text_splitted4 = []
+    if len(multiple1) > 0:
+        for i in range(0, len(text_splitted)):
+            for row in multiple1:
+                if row in text_splitted[i]:
+                    joined = text_splitted[i - 1] + row
+                    text_splitted4.append(joined)
+                    del text_splitted4[i - 1]
+                else:
+                    text_splitted4.append(text_splitted[i])
+
+    if len(text_splitted4) != 0:
+        text_splitted = text_splitted4
+
+    text_splitted5 = []
+    for row in text_splitted:
+        text_splitted5.append(row.strip())
+    text_splitted = text_splitted5
+    text_splitted_son = []
+    for row in text_splitted:
+        text_splitted_son.append(row + ' ')
+    text_splitted = text_splitted_son
+    text = "".join(text_splitted[1:])
+
+    news_list = []
+    text1 = text
+    for match in matches:
+        news_list.append(text1.split(match)[0])
+        text1 = text1.split(match)[1]
+    news_list.append(text)
+    news_list = news_list[1:]
+
+    #
+    multiple_codes1 = []
+    codes = []
+    for match in matches:
+        if ',' in match:
+            multiple_codes1.append(match.split('/')[1].split(','))
+            multiple_codes1_stripped = []
+            for row in multiple_codes1[0]:
+                multiple_codes1_stripped.append(row.strip())
+            multiple_codes1_stripped[-1] = multiple_codes1_stripped[-1][0:5].strip()
+            codes.append(multiple_codes1_stripped)
+        else:
+            codes.append(match.split('/')[1][0:7].strip()[0:5].strip())
+
+    # Preparing the last form of lists
+    print('Filling the lists')
+    codes_last = []
+    news_last = []
+    date_list = []
+    araci_kurum = []
+    time1 = []
+    news_id = []
+    k = 0
+    news_index = 0
+    for i in range(0, len(news_list)):
+        if type(codes[i]) == list:
+            for code in codes[i]:
+                codes_last.append(code)
+                news_last.append(news_list[i])
+                date_list.append(datetime.datetime.today().now().date())
+                araci_kurum.append('Gedik Yatırım')
+                time1.append(datetime.datetime.today().now().time())
+                news_id.append(k)
+                k = k + 1
+                print(f'Written news index: {news_index}')
+                news_index = news_index + 1
+        else:
+            codes_last.append(codes[i])
+            news_last.append(news_list[i])
+            date_list.append(datetime.datetime.now().date())
+            araci_kurum.append('Gedik Yatırım')
+            time1.append(datetime.datetime.today().now().time())
+            news_id.append(k)
+            k = k + 1
+            print(f'Written news index: {news_index}')
+            news_index = news_index + 1
+
+    if len(codes) == news_index + 1:
+        print('All data is succesfully written')
+
+    codes = codes_last
+    news = news_last
+    time = time1
+
+    data = pd.read_csv('C:/Users/berat/Ulakfin/Database/DATAs/MainDATA_written/mainDATA.csv')
+    last_row = len(data)
+    with open('C:/Users/berat/Ulakfin/Database/DATAs/MainDATA_written/mainDATA.csv', 'a', encoding='utf-8', newline="") as fp:
+        wr = csv.writer(fp)
+        for i in range(0,len(codes)):
+            csv_list = [last_row, date_list[i], codes[i], news[i], araci_kurum[i], time[i]]
+            print(csv_list)
+            last_row = last_row + 1
+            wr.writerow(csv_list)
