@@ -1,0 +1,137 @@
+def is_func():
+    import requests as req
+    import pandas as pd
+    from selenium import webdriver
+    from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
+    from pdfminer.pdfpage import PDFPage
+    from pdfminer.converter import TextConverter
+    from pdfminer.layout import LAParams
+    import io
+    import re
+    import datetime
+    import csv
+    import urllib.request
+
+    def pdf_to_text(path):
+        manager = PDFResourceManager()
+        retstr = io.StringIO()
+        layout = LAParams(all_texts=True)
+        device = TextConverter(manager, retstr, laparams=layout)
+        filepath = open(path, 'rb')
+        interpreter = PDFPageInterpreter(manager, device)
+        for page in PDFPage.get_pages(filepath, check_extractable=False):
+            interpreter.process_page(page)
+        text = retstr.getvalue()
+        filepath.close()
+        device.close()
+        retstr.close()
+        return text
+
+    def convert_list_to_string(org_list, seperator=' '):
+        return seperator.join(org_list)
+
+    option = webdriver.ChromeOptions()
+    option.add_argument("--incognito")
+    driver = webdriver.Chrome(executable_path='C:/Users/berat/webdriver/chromedriver', options=option)
+
+    for c in range(1,11):
+        click_xpath = f"//form/div[4]/div/div[2]/div/div/div[1]/div/div[3]/div/div[3]/div/div[1]/div/div/div[2]/div/div[1]/div/div[2]/div[{c}]"
+        driver.get("https://www.isyatirim.com.tr/tr-tr/analiz/arastirma-raporlari/Sayfalar/default.aspx#Default=%7B%22k%22%3A%22%22%2C%22r%22%3A%5B%7B%22n%22%3A%22ContentLanguage%22%2C%22t%22%3A%5B%22%5C%22TR%5C%22%22%5D%2C%22o%22%3A%22and%22%2C%22k%22%3Afalse%2C%22m%22%3Anull%7D%5D%2C%22o%22%3A%5B%7B%22d%22%3A1%2C%22p%22%3A%22ReportDate%22%7D%5D%7D")
+        check = driver.find_element_by_xpath(click_xpath)
+        checktxt = check.text
+        if checktxt.find('Piyasalarda Bugün')!=-1:
+            driver.find_element_by_xpath(click_xpath).click()
+            driver.switch_to.window(driver.window_handles[-1])
+            is_url = driver.current_url
+            ##
+            pdf = 'is_yatirim_' + is_url.split('pdf')[0][-12:-19]
+            urllib.request.urlretrieve(is_url,f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/PDFs/Is_yatırım/{pdf}.pdf")
+            break
+##
+    pdf_file = f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/PDFs/Is_yatırım/{pdf}.pdf"
+    ##
+    sirket_haberleri_pattern = '(?<=Sirket Haberleri).*?(?=Ajanda & Piyasa Verileri Linkleri)'
+    text_list = []
+    sirket_haber_list_1 =[]
+    text_list.append(pdf_to_text(pdf_file))
+    for text in text_list:
+        sirket_haber_list_1.append(re.findall(sirket_haberleri_pattern, text, re.DOTALL))
+
+    text = convert_list_to_string(sirket_haber_list_1[0])
+
+    haberler=[]
+    hisseler=[]
+    tarih=[]
+    bulten=[]
+    today = datetime.datetime.now().date()
+
+    if text.count('@isyatirim.com.tr')>1:
+        mail_split = text.split('@isyatirim.com.tr')
+        kapanis_split = []
+        for i in mail_split:
+            a = i.split('Kapanış (TL)')
+            kapanis_split.extend(a)
+        kapanis_split = kapanis_split[1:]
+
+        for o in kapanis_split:
+            bir = o.splitlines()
+            if bir[-1].find('TI Equity')!=-1:
+                iki = bir[-1].split()
+                hisseler.append(iki[0])
+                tarih.append(today)
+                bulten.append('İş')
+            else:
+                haberler.append(o)
+    else:
+        mail_split = text.split('@isyatirim.com.tr')
+        for i in mail_split:
+            if i.find('Kapanış (TL)')!=-1:
+                a = i.split('Kapanış (TL)')
+                hisseler.append(a[0])
+                tarih.append(today)
+                bulten.append('İş')
+            else:
+                haberler.append(i)
+
+    haberler2= []
+    for h in haberler:
+        if h.find('Lütfen raporumuzun sonunda yer alan bilgilendirme notuna bakınız.')!=-1:
+            h = h.replace('Lütfen raporumuzun sonunda yer alan bilgilendirme notuna bakınız.', 'X')
+        fo = h.splitlines()
+        appnd = fo[:-2]
+        ekle = convert_list_to_string(appnd)
+        haberler2.append(ekle)
+
+    timestamp = []
+    news_id = []
+    for q in hisseler:
+        timestamp.append(datetime.datetime.today().now().time())
+        c = 0
+        news_id.append(c)
+        c = c + 1
+
+    news1 = []
+    for i in range(0, len(haberler2)):
+        news_pr = haberler2[i].split('\n')
+        news_pr_strip = []
+        for k in range(0, len(news_pr)):
+            news_pr_strip.append(news_pr[k].strip())
+        news1.append(" ".join(news_pr_strip))
+    haberler2 = news1
+
+    #CREATING DATAFRAME
+    hisseler_df = pd.DataFrame(columns=['codes'], data=hisseler)
+    haberler_df = pd.DataFrame(columns=['news'], data=haberler2)
+    tarih_df = pd.DataFrame(columns=['date_list'], data=tarih)
+    bulten_df = pd.DataFrame(columns=['araci_kurum'], data=bulten)
+    timestamp_df = pd.DataFrame(columns=['timestamp'], data=timestamp)
+
+    data = pd.read_csv('C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv')
+    last_row = len(data) + 1
+    with open('C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv', 'a', encoding='utf-8', newline="") as fp:
+        wr = csv.writer(fp)
+        for i in range(0, len(hisseler)):
+            csv_list = [last_row, tarih[i], hisseler[i], haberler2[i], bulten[i], timestamp[i]]
+            print(csv_list)
+            last_row = last_row + 1
+            wr.writerow(csv_list)
