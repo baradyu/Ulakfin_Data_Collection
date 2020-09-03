@@ -41,13 +41,13 @@ def bmd_yatirim(n = 2):
     href1 = driver.find_elements_by_xpath('//div/a')[n]
     url = href1.get_attribute("href")
     driver.get(url)
-    href2 = driver.find_elements_by_xpath("//div/a[@target='_blank']")[2]
+    href2 = driver.find_elements_by_xpath("//div/a[@target='_blank']")[1]
     url2 = href2.get_attribute("href")
     pdf = "bmd_yatırım_" + url2.split('pdf')[0][-11:-1]
     print('Downloading PDF')
-    urllib.request.urlretrieve(url2, f"C:/Users/berat/Ulakfin/Database/PDFs/{pdf}.pdf")
+    urllib.request.urlretrieve(url2, f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/PDFs/BMD_yatırım/{pdf}.pdf")
     print('PDF is downloaded')
-    pdf_file = f"C:/Users/berat/Ulakfin/Database/PDFs/{pdf}.pdf"
+    pdf_file = f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/PDFs/BMD_yatırım/{pdf}.pdf"
 
     tarih = url2.split('pdf')[0][-11:-1]
     tarih = tarih.replace('_', '.')
@@ -105,6 +105,7 @@ def bmd_yatirim(n = 2):
                 codes1.append(codes[i])
                 time.append(datetime.datetime.today().now().time())
                 news_id.append(k)
+                araci_kurum.append('BMD Yatırım')
                 k = k + 1
                 print(f'Written news index: {news_index}')
                 news_index = news_index + 1
@@ -114,14 +115,20 @@ def bmd_yatirim(n = 2):
 
         codes = codes1
 
-        data = pd.read_csv('C:/Users/berat/Ulakfin/Database/DATAs/MainDATA_written/mainDATA.csv')
+        data = pd.read_csv('C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv')
         last_row = len(data)
-        with open('C:/Users/berat/Ulakfin/Database/DATAs/MainDATA_written/mainDATA.csv', 'a', encoding='utf-8', newline="") as fp:
+        with open('C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv', 'a', encoding='utf-8', newline="") as fp:
             wr = csv.writer(fp)
-            for i in range(0, len(codes)):
-                csv_list = [last_row, date_list[i], codes[i], news[i], araci_kurum[i], time[i]]
+            if len(codes) < 2:
+                csv_list = [last_row, date_list[0], codes[0], news[0], araci_kurum[0], time[0]]
                 print(csv_list)
                 last_row = last_row + 1
                 wr.writerow(csv_list)
+            else:
+                for i in range(0, len(codes)):
+                    csv_list = [last_row, date_list[i], codes[i], news[i], araci_kurum[i], time[i]]
+                    print(csv_list)
+                    last_row = last_row + 1
+                    wr.writerow(csv_list)
     else:
         print('No data from BMD Yatırım Today')
