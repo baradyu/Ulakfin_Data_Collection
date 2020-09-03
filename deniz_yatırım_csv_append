@@ -28,7 +28,7 @@ def deniz_yatirim(n=5):
     pdf = 'deniz_yatırım_' + url.split('GUNLUK_BULTEN_-_')[1][0:10]
     # ---------------------- GETTING AND DOWNLOADING THE PDF
     print('PDF is being downloaded')
-    urllib.request.urlretrieve(url, f"C:/Users/berat/Ulakfin/Database/PDFs/{pdf}.pdf")
+    urllib.request.urlretrieve(url, f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/PDFs/Deniz_yatırım{pdf}.pdf")
     print('PDF is downloaded')
     # ----------------------- EXTRACTING THE TEXT
     def pdf_to_text(path):
@@ -47,7 +47,7 @@ def deniz_yatirim(n=5):
         return text
         #
 
-    pdf_file = f"C:/Users/berat/Ulakfin/Database/PDFs/{pdf}.pdf"
+    pdf_file = f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/PDFs/Deniz_yatırım{pdf}.pdf"
     text_list = [pdf_to_text(pdf_file)]
 
     # ---------------------------------- SETTING THE BOUNDARIES
@@ -70,8 +70,9 @@ def deniz_yatirim(n=5):
     while i in range(0, len(text_splitted2)):
         if 'DENİZBANK YATIRIM' in text_splitted2[i]:
             i = i + 3
-        text_splitted3.append(text_splitted2[i])
-        i = i + 1
+        if i in range(0, len(text_splitted2)):
+            text_splitted3.append(text_splitted2[i])
+            i = i + 1
 
     text_splitted2 = text_splitted3
 
@@ -144,9 +145,9 @@ def deniz_yatirim(n=5):
     if len(codes) == news_index:
         print('All data is succesfully written')
 
-    data = pd.read_csv('C:/Users/berat/Ulakfin/Database/DATAs/MainDATA_written/mainDATA.csv')
+    data = pd.read_csv('C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv')
     last_row = len(data)
-    with open('C:/Users/berat/Ulakfin/Database/DATAs/MainDATA_written/mainDATA.csv', 'a', encoding='utf-8', newline="") as fp:
+    with open('C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv', 'a', encoding='utf-8', newline="") as fp:
         wr = csv.writer(fp)
         for i in range(0,len(codes)):
             csv_list = [last_row , date_list[i], codes[i], news[i], araci_kurum[i], time[i]]
