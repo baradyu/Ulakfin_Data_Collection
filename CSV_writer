@@ -1,30 +1,44 @@
-from a1capital_csv_append import a1capital
-from bmd_yatırım_csv_append import bmd_yatirim
-from deniz_yatırım_csv_append import deniz_yatirim
-from gedik_yatırım_csv_append import gedik_yatirim
-from info_yatırım_csv_append import info_yatirim
-import time
+import a1capital_csv_append
+import bmd_yatırım_csv_append
+import deniz_yatırım_csv_append
+import gedik_yatırım_csv_append
+import info_yatırım_csv_append
+import oyak_yatirim
+import piramit_yatirim
+import vakif_yatirim
+import ziraat_yatirim
+import HALK
+import IS
+import METRO
+import HSBC
+import MARBAS
 
-print('Parsing A1Capital Data...')
-a1capital()
-time.sleep(2)
-print('A1Capital parsing is completed')
-print('Parsing BMD Yatırım Data...')
-bmd_yatirim()
-time.sleep(2)
-print('BMD Yatırım parsing is completed')
-print('Parsing Deniz Yatırım Data...')
-deniz_yatirim()
-time.sleep(2)
-print('Deniz Yatırım parsing is completed')
-print('Parsing Gedik Yatırım Data...')
-gedik_yatirim()
-time.sleep(2)
-print('Gedik Yatırım parsing is completed')
-print('Parsing İnfo Yatırım Data...')
-info_yatirim()
-time.sleep(2)
-print('İnfo Yatırım parsing is completed')
 
-print('All data is parsed to C:/Users/berat/Ulakfin/Database/DATAs/MainDATA_written')
-print('All data is parsed to C:/Users/berat/Documents/Ulakfin/Ulakfin Database')
+print('a1')
+a1capital_csv_append.a1capital()
+print('bmd')
+bmd_yatırım_csv_append.bmd_yatirim()
+print('deniz')
+deniz_yatırım_csv_append.deniz_yatirim()
+print('gedik')
+gedik_yatırım_csv_append.gedik_yatirim()
+print('info')
+info_yatırım_csv_append.info_yatirim()
+print('oyak')
+oyak_yatirim.oyak_yatirim()
+print('piramit')
+piramit_yatirim.piramit_yatirim()
+print('vakif')
+vakif_yatirim.vakif_yatirim()
+print('ziraat')
+ziraat_yatirim.ziraat_yatirim()
+print('halk')
+HALK.halk_func()
+print('IS')
+IS.is_func()
+print('HSBC')
+HSBC.hsbc_func()
+print('metro')
+METRO.metro_func()
+print('marbas')
+MARBAS.marbas_func()
