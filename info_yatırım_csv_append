@@ -123,9 +123,9 @@ def info_yatirim():
     date_list = date1
     araci_kurum = araci_kurum1
 
-    data = pd.read_csv('C:/Users/berat/Ulakfin/Database/DATAs/MainDATA_written/mainDATA.csv')
+    data = pd.read_csv('C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv')
     last_row = len(data)
-    with open('C:/Users/berat/Ulakfin/Database/DATAs/MainDATA_written/mainDATA.csv', 'a', encoding='utf-8', newline="") as fp:
+    with open('C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv', 'a', encoding='utf-8', newline="") as fp:
         wr = csv.writer(fp)
         for i in range(0,len(codes)):
             csv_list = [last_row, date_list[i], codes[i], news[i], araci_kurum[i], time[i]]
@@ -133,4 +133,3 @@ def info_yatirim():
             last_row = last_row + 1
             wr.writerow(csv_list)
 
-info_yatirim()
