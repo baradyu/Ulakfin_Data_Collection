@@ -1,4 +1,3 @@
-
 def gedik_yatirim(n=4):
     # -----------IMPORTS----------#
     import pandas as pd
@@ -37,8 +36,8 @@ def gedik_yatirim(n=4):
     href = driver.find_elements_by_xpath('//div/a')[n]  # -----------------------------------------------------------------
     url = href.get_attribute("href")
     pdf = 'gedik_yatırım_' + url.split('pdf')[0][-11:-1]
-    print('Downloading PDF to: C:/Users/berat/Ulakfin/Database/PDFs')
-    urllib.request.urlretrieve(url, f"C:/Users/berat/Ulakfin/Database/PDFs/{pdf}.pdf")
+    print('Downloading PDF to: C:/Users/berat/Desktop/Ulakfin - Ortak Data/PDFs/Gedik_yatırım/{pdf}.pdf')
+    urllib.request.urlretrieve(url, f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/PDFs/Gedik_yatırım/{pdf}.pdf")
     print('PDF is downloaded')
 
     # PDF MINER FUNCTION
@@ -58,7 +57,7 @@ def gedik_yatirim(n=4):
         return text
 
     # Getting the data between 'KAP Haberleri' and 'Veri Takvimi'
-    pdf_file = f"C:/Users/berat/Ulakfin/Database/PDFs/{pdf}.pdf"
+    pdf_file = f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/PDFs/Gedik_yatırım/{pdf}.pdf"
     sirket_haberleri_pattern = '(?<=KAP Haberleri).*?(?=Veri Takvimi)'
     text_list = []
     sirket_haber_list_1 = []
@@ -78,7 +77,7 @@ def gedik_yatirim(n=4):
     # Deleting the unwanted informative lines.
     text_splitted3 = []
     for row in text_splitted:
-        if '*Kamuyu Aydınlatma  Platformu’na' not in row and 'gelen haberleri' not in row and \
+        if '*Kamuyu Aydınlatma' not in row and 'gelen haberleri' not in row and \
                 'Şirket haberleri araştırm' not in row and '444 0 435' not in row and \
                 'ww.gedikyatirim.com.t' not in row and 'Günlük Bülten' not in row and \
                 'SPK  ve  BIST  kararıyla  Tedb' not in row and 'buradan ulaşabil' not in row:
@@ -150,7 +149,7 @@ def gedik_yatirim(n=4):
     for row in text_splitted:
         text_splitted_son.append(row + ' ')
     text_splitted = text_splitted_son
-    text = "".join(text_splitted[1:])
+    text = "".join(text_splitted)
 
     news_list = []
     text1 = text
@@ -214,9 +213,9 @@ def gedik_yatirim(n=4):
     news = news_last
     time = time1
 
-    data = pd.read_csv('C:/Users/berat/Ulakfin/Database/DATAs/MainDATA_written/mainDATA.csv')
+    data = pd.read_csv('C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv')
     last_row = len(data)
-    with open('C:/Users/berat/Ulakfin/Database/DATAs/MainDATA_written/mainDATA.csv', 'a', encoding='utf-8', newline="") as fp:
+    with open('C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv', 'a', encoding='utf-8', newline="") as fp:
         wr = csv.writer(fp)
         for i in range(0,len(codes)):
             csv_list = [last_row, date_list[i], codes[i], news[i], araci_kurum[i], time[i]]
