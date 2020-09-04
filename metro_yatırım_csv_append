@@ -76,6 +76,9 @@ def metro_func():
             elif line.split()[0].isupper() and line.find(' - ')!=-1:
                 hisseler.append(line.split(' - ')[0])
                 haberler.append(line.split(' - ')[1])
+            elif line.split()[0].isupper() and line.find(',')!=-1:
+                hisseler.append(line.split(',')[0])
+                haberler.append(line.split(',')[1])
             else:
                 eski_haber = haberler[-1]
                 haberler = haberler[:-1]
@@ -111,7 +114,7 @@ def metro_func():
         stored_df = pd.concat([tarih_df, hisseler_df, haberler_df, bulten_df, timestamp_df], axis=1)
 
         data = pd.read_csv('C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv')
-        last_row = len(data) + 1
+        last_row = len(data)
         with open('C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv', 'a', encoding='utf-8', newline="") as fp:
             wr = csv.writer(fp)
             for i in range(0, len(hisseler)):
