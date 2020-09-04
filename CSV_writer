@@ -7,12 +7,12 @@ import oyak_yatirim
 import piramit_yatirim
 import vakif_yatirim
 import ziraat_yatirim
+import tacirler_yatirim
 import HALK
 import IS
 import METRO
 import HSBC
 import MARBAS
-
 
 print('a1')
 a1capital_csv_append.a1capital()
@@ -32,6 +32,8 @@ print('vakif')
 vakif_yatirim.vakif_yatirim()
 print('ziraat')
 ziraat_yatirim.ziraat_yatirim()
+print('tacirler')
+tacirler_yatirim.tacirler_yatirim()
 print('halk')
 HALK.halk_func()
 print('IS')
