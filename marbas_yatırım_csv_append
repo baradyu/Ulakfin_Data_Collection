@@ -10,7 +10,6 @@ def marbas_func():
     import re
     import datetime
     import csv
-    import urllib.request
 
     #GETTING PDF AS TEXT
     def download_pdf(url):
@@ -47,10 +46,9 @@ def marbas_func():
 
     url_date = date.today().strftime("%Y%m%d")
     marbas_url = f"https://marbasmenkul.com.tr/bultenler/g{url_date}.pdf"
-    pdf = 'marbas_yatirim' +  marbas_url.split('pdf')[0][-1:-8]
-    urllib.request.urlretrieve(marbas_url, f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/PDFs/Marbas_yatırım/{pdf}.pdf")
+    marbas = download_pdf(marbas_url)
 
-    pdf_file = f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/PDFs/Marbas_yatırım/{pdf}.pdf"
+    pdf_file = f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/{marbas}"
     sirket_haberleri_pattern = '(?<=Şirket Haberleri).*?(?=Pariteler)'
     text_list = []
     sirket_haber_list_1 =[]
@@ -127,12 +125,14 @@ def marbas_func():
     timestamp_df = pd.DataFrame(columns=[''], data=timestamp)
     stored_df = pd.concat([tarih_df, hisseler_df, haberler_df, bulten_df, timestamp_df], axis=1)
 
-    data = pd.read_csv('C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv')
+    data = pd.read_csv("C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv")
     last_row = len(data)
-    with open('C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv', 'a', encoding='utf-8', newline="") as fp:
+    with open("C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv", 'a', encoding='utf-8', newline="") as fp:
         wr = csv.writer(fp)
         for i in range(0, len(hisseler3)):
             csv_list = [last_row, tarih[i], hisseler3[i], haberler2[i], bulten[i], timestamp[i]]
             print(csv_list)
             last_row = last_row + 1
             wr.writerow(csv_list)
+
+    return stored_df
