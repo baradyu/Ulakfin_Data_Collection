@@ -101,9 +101,9 @@ def a1capital():
             news_index = news_index + 1
             k = k + 1
 
-    data = pd.read_csv('C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv')
+    data = pd.read_csv('C:/Users/berat/Ulakfin/Database/DATAs/MainDATA_written/mainDATA.csv')
     last_row = len(data)
-    with open('C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv', 'a', encoding='utf-8', newline="") as fp:
+    with open('C:/Users/berat/Ulakfin/Database/DATAs/MainDATA_written/mainDATA.csv', 'a', encoding='utf-8', newline="") as fp:
         wr = csv.writer(fp)
         for i in range(0,len(codes)):
             csv_list = [last_row , date_list[i], codes[i], news[i], araci_kurum[i], time[i]]
