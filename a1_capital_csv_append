@@ -45,14 +45,29 @@ def a1capital():
         month1 = 'aralik'
     print('Converted to readible date pattern')
 
-    driver.get(f'https://a1capital.com.tr/{day}-{month1}-gunluk-bulten/')
+    print('Günlük Bülten page(URL pattern can be changed)')
+    driver.get(f'https://a1capital.com.tr/{day}-{month1}-gunluk-bulten/') ###############################################
+    print('Getting the news lines by XPATH')
+
     lines1 = driver.find_elements_by_xpath('/html/body/div[1]/div/div/div[2]/div/article/div/div/div[1]/div/div'
                                            '/div[2]/table[2]/tbody/tr[2]/td/table/tbody/tr')
+    lines2 = driver.find_elements_by_xpath('/html/body/div[1]/div/div/div[2]/div/article/div/div/div[1]/div/div'
+                                           '/div[2]/table[2]/tbody/tr[3]/td/table[1]/tbody/tr[2]/td/table/tbody/tr')
+    lines3 = driver.find_elements_by_xpath('/html/body/div[1]/div/div/div[2]/div/article/div/div/div[1]/div/div'
+                                          '/div[2]/table[2]/tbody/tr[3]/td/table[2]/tbody/tr[3]/td/table/tbody/tr')
 
     codes = []
     news = []
     date_list = []
     for row in lines1:
+        codes.append(row.find_element_by_xpath('./td[2]/p/b/span').text)
+        news.append(row.find_element_by_xpath('./td[4]/p/span').text)
+        date_list.append(datetime.datetime.today().date())
+    for row in lines2:
+        codes.append(row.find_element_by_xpath('./td[2]/p/b/span').text)
+        news.append(row.find_element_by_xpath('./td[4]/p/span').text)
+        date_list.append(datetime.datetime.today().date())
+    for row in lines3:
         codes.append(row.find_element_by_xpath('./td[2]/p/b/span').text)
         news.append(row.find_element_by_xpath('./td[4]/p/span').text)
         date_list.append(datetime.datetime.today().date())
@@ -101,9 +116,9 @@ def a1capital():
             news_index = news_index + 1
             k = k + 1
 
-    data = pd.read_csv('C:/Users/berat/Ulakfin/Database/DATAs/MainDATA_written/mainDATA.csv')
+    data = pd.read_csv('C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv')
     last_row = len(data)
-    with open('C:/Users/berat/Ulakfin/Database/DATAs/MainDATA_written/mainDATA.csv', 'a', encoding='utf-8', newline="") as fp:
+    with open('C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv', 'a', encoding='utf-8', newline="") as fp:
         wr = csv.writer(fp)
         for i in range(0,len(codes)):
             csv_list = [last_row , date_list[i], codes[i], news[i], araci_kurum[i], time[i]]
