@@ -45,39 +45,52 @@ def a1capital():
         month1 = 'aralik'
     print('Converted to readible date pattern')
 
-    print('Günlük Bülten page(URL pattern can be changed)')
-    driver.get(f'https://a1capital.com.tr/{day}-{month1}-gunluk-bulten/') ###############################################
-    print('Getting the news lines by XPATH')
-
+    print('https://a1capital.com.tr/11-eylul-gunluk-bulten-X/  The x here can be 2, 3, 4 if it gives index error check the URL ')
+    driver.get(f'https://a1capital.com.tr/{str(datetime.datetime.now().date())[-2:]}-{month1}-gunluk-bulten/') ###############################################
+    print("Finding 'Şirket haberleri' lines byXPATH")
     lines1 = driver.find_elements_by_xpath('/html/body/div[1]/div/div/div[2]/div/article/div/div/div[1]/div/div'
                                            '/div[2]/table[2]/tbody/tr[2]/td/table/tbody/tr')
+    print("Finding 'Pay alım-satım haberleri' lines byXPATH")
     lines2 = driver.find_elements_by_xpath('/html/body/div[1]/div/div/div[2]/div/article/div/div/div[1]/div/div'
                                            '/div[2]/table[2]/tbody/tr[3]/td/table[1]/tbody/tr[2]/td/table/tbody/tr')
+    print("Finding 'sermaye artırım haberleri' lines byXPATH")
     lines3 = driver.find_elements_by_xpath('/html/body/div[1]/div/div/div[2]/div/article/div/div/div[1]/div/div'
                                           '/div[2]/table[2]/tbody/tr[3]/td/table[2]/tbody/tr[3]/td/table/tbody/tr')
+
 
     codes = []
     news = []
     date_list = []
-    for row in lines1:
-        codes.append(row.find_element_by_xpath('./td[2]/p/b/span').text)
-        news.append(row.find_element_by_xpath('./td[4]/p/span').text)
+    # If an error occurs here check xpaths below
+    print('# If an error occurs here check xpaths below')
+    print("Parsing and 'Şirket Haberleri' elements to lists")
+    for n in range(0, len(lines1)):
+        codes.append(lines1[n].find_element_by_xpath('./td[2]/p/b/span').text)
+        news.append(lines1[n].find_element_by_xpath('./td[4]/p/span').text)
         date_list.append(datetime.datetime.today().date())
-    for row in lines2:
-        codes.append(row.find_element_by_xpath('./td[2]/p/b/span').text)
-        news.append(row.find_element_by_xpath('./td[4]/p/span').text)
+        print(f"{n}: {codes[n]} - {news[n]} - {date_list[n]} ")
+    print("Parsing and 'Pay Alım Satım' elements to lists")
+    for n in range(0, len(lines2)):
+        codes.append(lines2[n].find_element_by_xpath('./td[2]/p/b/span').text)
+        news.append(lines2[n].find_element_by_xpath('./td[4]/p/span').text)
         date_list.append(datetime.datetime.today().date())
-    for row in lines3:
-        codes.append(row.find_element_by_xpath('./td[2]/p/b/span').text)
-        news.append(row.find_element_by_xpath('./td[4]/p/span').text)
+        print(f"{len(lines1) + n}: {codes[len(lines1) +n]} - {news[len(lines1) + n]} - {codes[len(lines1) +n]} ")
+    print("Parsing and 'Sermaye Artırım' elements to lists")
+    for n in range(0, len(lines3)):
+        codes.append(lines3[n].find_element_by_xpath('./td[2]/p/b/span').text)
+        news.append(lines3[n].find_element_by_xpath('./td[4]/p/span').text)
         date_list.append(datetime.datetime.today().date())
+    print(f"{len(lines1 + lines2) + n}: {codes[len(lines1 + lines2) + n]} - {news[len(lines1 + lines2) + n]} - "
+          f"{codes[len(lines1 + lines2) + n]} ")
 
+    print('Writing DataFrame')
     data1 = pd.DataFrame(list(zip(date_list, codes, news)))
     data1.columns = ['date', 'code', 'sentiment']
 
     codes = data1['code'].tolist()
     news = data1['sentiment'].tolist()
 
+    print('Omitting unwanted rows')
     news_last1 = []
     codes_last1 = []
     for i in range(0, len(codes)):
@@ -85,6 +98,7 @@ def a1capital():
             codes_last1.append(codes[i])
             news_last1.append(news[i])
 
+    print('Writing last lists')
     codes = []
     news = []
     news_id = []
@@ -116,6 +130,7 @@ def a1capital():
             news_index = news_index + 1
             k = k + 1
 
+    print('Writing the daily data to csv')
     data = pd.read_csv('C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv')
     last_row = len(data)
     with open('C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv', 'a', encoding='utf-8', newline="") as fp:
