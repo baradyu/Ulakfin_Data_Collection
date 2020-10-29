@@ -1,0 +1,227 @@
+def a1capital():
+    print('A1Capital')
+    # Imports
+    from selenium.webdriver.chrome.options import Options
+    import pandas as pd
+    from selenium import webdriver
+    import datetime
+    import time
+    import selenium
+    import warnings
+    from slack import WebClient
+    print('Modules imported')
+
+    slack_token = 'xoxb-1310569939731-1373479534900-EAQbiKWSTqT0TxoJI7EfM5TP'
+    slack_channel = '#csv'
+    slack_icon_url = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTuGqps7ZafuzUsViFGIremEL2a3NR0KO0s0RTCMXmzmREJd5m4MA&s'
+    slack_user_name = 'informer'
+    import requests
+    import json
+    def post_message_to_slack(text, blocks=None):
+        return requests.post('https://slack.com/api/chat.postMessage', {
+            'token': slack_token,
+            'channel': slack_channel,
+            'text': text,
+            'icon_url': slack_icon_url,
+            'username': slack_user_name,
+            'blocks': json.dumps(blocks) if blocks else None
+        }).json()
+
+    # Setting Webdriver
+    DRIVER_PATH = 'C:/Users/berat/webdriver/chromedriver'  # BILGISAYARDA chromedriver'ın bulunduğu yer
+    options = Options()
+    options.headless = False
+    options.add_argument("--window-size=1920,1200")
+    driver = webdriver.Chrome(options=options, executable_path=DRIVER_PATH)
+    print('Webdriver is set')
+
+    # Getting to the webpage : "https://a1capital.com.tr/analizler/"---------------------------------------------------
+    driver.get("https://a1capital.com.tr/analizler/")
+    print(f'Current webpage : {driver.current_url}')
+    time.sleep(10)
+
+    c1 = driver.find_element_by_xpath(
+        '/html/body/div[1]/div/div/div[2]/div/article/div/div[1]/div[1]/div/div/div/div/div[2]/div/div[1]/div[2]/div/div[1]/div/div/div[2]/div/div[2]/div[1]/div/div/div/div[1]/div[1]/div/div/a')
+       #'/html/body/div[1]/div/div/div[2]/div/article/div/div[1]/div[1]/div/div/div/div/div[2]/div/div[1]/div[2]/div/div[1]/div/div/div[2]/div/div[2]/div[1]/div/div/div/div[2]/div[1]/div/div/a'
+    time.sleep(3)
+    title1 = c1.get_attribute("title")
+    if 'Günlük Bülten' not in title1:
+        print('Teknik Bülten is chosen')
+        c1 = driver.find_element_by_xpath(
+            '/html/body/div[1]/div/div/div[2]/div/article/div/div[1]/div[1]/div/div/div/div/div[2]/div/div[1]/div[2]/div/div[1]/div/div/div[2]/div/div[2]/div[1]/div/div/div/div[2]/div[1]/div/div/a')
+
+    try:
+        href = c1
+        time.sleep(5)
+    except selenium.common.exceptions.NoSuchElementException:
+        post_message_to_slack(
+            f'*ERROR-A1Capital:* Could not find news of {datetime.datetime.now().date()}.'
+            f'\n    _Note: It is possible that it has not been posted on the website yet._')
+        raise Exception(
+            f'*ERROR-A1Capital:* Could not find news of {datetime.datetime.now().date()}. '
+            f'\n    _Note: It is possible that it has not been posted on the website yet._')
+
+    time.sleep(6)
+    url = href.get_attribute("href")
+    # Getting to the daily news page-----------------------------------------------------------------------------------
+    print('Getting to the daily news page')
+    driver.get(url)
+    print(f'Current webpage : {driver.current_url}')
+    time.sleep(5)
+    post_message_to_slack(f"-{url}")
+
+    # Getting şirket haberleri locations as a list
+    print("Getting şirket haberleri locations as a list")
+    lines1 = driver.find_elements_by_xpath('/html/body/div[1]/div/div/div[2]/div/article/div/div/div[1]/div/div'
+                                           '/div[2]/table[2]/tbody/tr[2]/td/table/tbody/tr')
+
+    lines2 = driver.find_elements_by_xpath('/html/body/div[1]/div/div/div[2]/div/article/div/div/div[1]/div/div'
+                                           '/div[2]/table[2]/tbody/tr[3]/td/table[1]/tbody/tr[2]/td/table/tbody/tr')
+
+    lines3 = driver.find_elements_by_xpath('/html/body/div[1]/div/div/div[2]/div/article/div/div/div[1]/div/div'
+                                           '/div[2]/table[2]/tbody/tr[3]/td/table[2]/tbody/tr[2]/td/table/tbody/tr')
+
+    codes = []
+    news = []
+    date_list = []
+    # If an error occurs here First check
+    if len(lines1) > 1:
+        print("Parsing 'Şirket Haberleri'")
+        for n in range(0, len(lines1)):
+            codes.append(lines1[n].find_element_by_xpath('./td[2]/p/b/span').text)
+            news.append(lines1[n].find_element_by_xpath('./td[4]/p/span').text)
+            date_list.append(datetime.datetime.today().date())
+            print(f"{n}: {codes[n]} - {news[n]} - {date_list[n]} ")
+    if driver.find_element_by_xpath(
+            '/html/body/div[1]/div/div/div[2]/div/article/div/div/div[1]/div/div/div[2]/table[2]/tbody/tr[3]/td/table[1]/tbody/tr[1]/td').text == 'PAY ALIM SATIM HABERLERİ':
+        print("Parsing 'Pay Alım Satım Haberleri'")
+        for n in range(0, len(lines2)):
+            codes.append(lines2[n].find_element_by_xpath('./td[2]/p/b/span').text)
+            news.append(lines2[n].find_element_by_xpath('./td[4]/p/span').text)
+            date_list.append(datetime.datetime.today().date())
+            print(f"{len(lines1) + n}: {codes[len(lines1) + n]} - {news[len(lines1) + n]} - {codes[len(lines1) + n]} ")
+    else:
+        warnings.warn(
+            "There is not 'Pay Alım Satım Haberi' today \n Check XPATH 'lines2' and the website if there is not any news")
+        post_message_to_slack(f"*Warning: There is not 'Pay Alım Satım Haberi' today.*"
+                              f"\n          _check URL:_{driver.current_url}")
+    if driver.find_element_by_xpath(
+            '/html/body/div[1]/div/div/div[2]/div/article/div/div/div[1]/div/div/div[2]/table[2]/tbody/tr[3]/td/table[2]/tbody/tr[1]/td').text == 'SERMAYE ARTIRIM HABERLERİ':
+        print("Parsing 'Sermaye Artırım Haberleri'")
+        for n in range(0, len(lines3)):
+            codes.append(lines3[n].find_element_by_xpath('./td[2]/p/b/span').text)
+            news.append(lines3[n].find_element_by_xpath('./td[4]/p/span').text)
+            date_list.append(datetime.datetime.today().date())
+            print(
+                f"{len(lines1 + lines2) + n}: {codes[len(lines1 + lines2) + n - 1]} - {news[len(lines1 + lines2) + n - 1]} - "
+                f"{codes[len(lines1 + lines2) + n - 1]} ")
+    else:
+        warnings.warn(
+            "There is not 'Sermaye Artırım Haberi' today. \n Check XPATH 'lines3' and the website if there is not any news")
+        post_message_to_slack(f"*Warning: There is not 'Sermaye Artırım Haberi' today,*"
+                              f"\n          _check URL:_{driver.current_url}")
+
+    news_last1 = news
+    codes_last1 = codes
+
+    # Writing final lists ---------------------------------------------------------------------------------------------
+    print('Writing final lists')
+    codes = []
+    news = []
+    news_id = []
+    time = []
+    date_list = []
+    araci_kurum = []
+    link = []
+    news_index = 0
+    k = 0
+
+
+    for i in range(0, len(codes_last1)):
+        if ',' in codes_last1[i]:
+            for code in codes_last1[i].split(','):
+                codes.append(code.strip())
+                news.append(news_last1[i])
+                news_id.append(k)
+                time.append(datetime.datetime.today().now().time())
+                date_list.append((datetime.datetime.now().date()))
+                araci_kurum.append('A1 Capital')
+                link.append(driver.current_url)
+                print(f'Written news index: {news_index}')
+                news_index = news_index + 1
+                k = k + 1
+        else:
+            codes.append(codes_last1[i])
+            news.append(news_last1[i])
+            news_id.append(k)
+            time.append(datetime.datetime.today().now().time())
+            date_list.append((datetime.datetime.now().date()))
+            araci_kurum.append('A1 Capital')
+            link.append(driver.current_url)
+            print(f'Written news index: {news_index}')
+            news_index = news_index + 1
+            k = k + 1
+
+
+    codes_deneme = codes
+
+    if len(codes_deneme) < 1:
+        warnings.warn('* * * * * No news from A1Capital today * * * * *')
+        post_message_to_slack('\n\n_No news from A1Capital today_\n\n')
+        return
+
+    df = pd.DataFrame(list(zip(date_list, codes, news, araci_kurum, time, link)))
+    df.columns = ['date_list', 'codes', 'news', 'araci_kurum', 'timestamp', 'link']
+
+    df1 = df
+
+    first_row_count = df.shape[0]
+    # Hisse Sembolü kontrolü
+    df = df.rename(columns={'codes': 'ISLEM  KODU'})
+    df['ISLEM  KODU'] = df['ISLEM  KODU'].astype(str) + '.E'
+    df_bist = pd.read_csv('C:/Users/berat/Desktop/Ulakfin - Ortak Data/slack_csv/hissesembolu.csv', delimiter=';')
+    df = pd.merge(df, df_bist, on=["ISLEM  KODU"])
+    df = df[['date_list', 'ISLEM  KODU', 'news', 'araci_kurum', 'timestamp', 'link']]
+
+    codes2 = []
+    for i in range(0, len(df['ISLEM  KODU'])):
+        codes2.append(df['ISLEM  KODU'][i].split('.E')[0])
+
+    df['ISLEM  KODU'] = codes2
+    df = df.rename(columns={'ISLEM  KODU': 'codes'})
+    second_row_count = df.shape[0]
+
+    ### NOT TAKEN NEWS
+    frames = [df1, df]
+    merged = pd.concat(frames)
+    not_taken = merged.drop_duplicates(keep=False)
+    if len(not_taken) != 0:
+        not_taken.to_csv(f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/slack_csv_folded/A1Capital/{str(datetime.datetime.now().date())}_not_taken.csv", encoding="utf-8",
+                         index=False, header=False, mode='a')
+
+        client = WebClient(token='xoxb-1310569939731-1373479534900-EAQbiKWSTqT0TxoJI7EfM5TP')
+
+        post_message_to_slack('News which are not parsed.')
+        response = client.files_upload(
+            channels="#csv",
+            file=f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/slack_csv_folded/A1Capital/{str(datetime.datetime.now().date())}_not_taken.csv",
+            title=f"not taken csv file {datetime.datetime.now().date()}"
+        )
+        ###
+
+    # ID Number yazdırma
+    old_df = pd.read_csv("C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv")
+    last_id = old_df['news_id'].iloc[-1]
+    df['news_id'] = range(last_id + 1, last_id + 1 + len(df))
+    df = df[['news_id', 'date_list', 'codes', 'news', 'araci_kurum', 'timestamp', 'link']]
+
+    print(f"{second_row_count} news parsed out of {first_row_count} news scrapped.")
+    post_message_to_slack(
+        f"*Accuracy:* {second_row_count} news parsed, out of {first_row_count} news scrapped.")
+
+    print(df)
+    df.to_csv("C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv", encoding="utf-8",
+              index=False, header=False, mode='a')
+
+    driver.close()
+    print('A1 Capital is completed.')
