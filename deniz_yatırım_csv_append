@@ -1,5 +1,6 @@
 def deniz_yatirim(n=5):
-    # -----------IMPORTS----------#
+    print('Deniz Yatırım')
+    # Import
     import pandas as pd
     import urllib.request
     from selenium import webdriver
@@ -10,27 +11,65 @@ def deniz_yatirim(n=5):
     from pdfminer.layout import LAParams
     import io
     import datetime
-    import openpyxl
-    import csv
+    import time
+    import warnings
+    import selenium
+    from slack import WebClient
+    print('Modules are imported.')
 
-    print('Modules Imported')
+    slack_token = 'xoxb-1310569939731-1373479534900-EAQbiKWSTqT0TxoJI7EfM5TP'
+    slack_channel = '#csv'
+    slack_icon_url = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTuGqps7ZafuzUsViFGIremEL2a3NR0KO0s0RTCMXmzmREJd5m4MA&s'
+    slack_user_name = 'informer'
+    import requests
+    import json
+    def post_message_to_slack(text, blocks=None):
+        return requests.post('https://slack.com/api/chat.postMessage', {
+            'token': slack_token,
+            'channel': slack_channel,
+            'text': text,
+            'icon_url': slack_icon_url,
+            'username': slack_user_name,
+            'blocks': json.dumps(blocks) if blocks else None
+        }).json()
 
-    DRIVER_PATH = 'C:/Users/berat/webdriver/chromedriver'  # BILGISAYARDA chromedriver'ın bulunduğu yer
+    # Setting the webdriver
+    DRIVER_PATH = 'C:/Users/berat/webdriver/chromedriver'  # path of webdriver
     options = Options()
-    options.headless = True
+    options.headless = False
     options.add_argument("--window-size=1920,1200")
     driver = webdriver.Chrome(options=options, executable_path=DRIVER_PATH)
+    print('Webdriver is set.')
 
-    link = "https://www.denizyatirim.com/raporlar/"
-    driver.get(link)
-    href = driver.find_elements_by_xpath('//div/a')[n]
-    url = href.get_attribute("href")
-    pdf = 'deniz_yatırım_' + url.split('GUNLUK_BULTEN_-_')[1][0:10]
+    driver.get('https://www.denizyatirim.com/arastirma-notlari/')
+    print(f'Current webpage : {driver.current_url}')
+    time.sleep(2)
+    print('Getting to the daily news page.')
+
+    try:
+        to_href = driver.find_element_by_xpath('/html/body/div[2]/div[2]/div[3]/div[2]/div[1]/div[1]/div[1]/a')
+    except selenium.common.exceptions.NoSuchElementException:
+        post_message_to_slack(f'*ERROR-Deniz Yatırım:* Could not find news of {datetime.datetime.now().date()}. \n Note: It is possible that it has not been posted on the website yet: {driver.current_url} ')
+        raise Exception(f'➢ ERROR_Deniz Yatırım: Could not find news of {datetime.datetime.now().date()}. \n Note: It is possible that it has not been posted on the website yet: {driver.current_url} ')
+
+
+    time.sleep(2)
+    url = to_href.get_attribute('href')
+    post_message_to_slack(f"-{url}")
+    print(f'PDF url : {url}')
+    pdf = 'deniz_yatırım_' + str(datetime.datetime.now().date())
     # ---------------------- GETTING AND DOWNLOADING THE PDF
-    print('PDF is being downloaded')
-    urllib.request.urlretrieve(url, f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/PDFs/Deniz_yatırım{pdf}.pdf")
-    print('PDF is downloaded')
-    # ----------------------- EXTRACTING THE TEXT
+    print('Downloading PDF...')
+    try:
+        urllib.request.urlretrieve(url, f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/PDFs/Deniz_yatırım/{pdf}.pdf")
+        print('PDF is downloaded')
+    except urllib.error.HTTPError:
+        post_message_to_slack('*ERROR-BMD Yatırım:* The website is probably blocking you from downloading the pdf. \n It is better try it again later')
+        raise Exception('The website is probably blocking you. \n It is better try it again later')
+
+    driver.close()
+
+    # PDFMiner function
     def pdf_to_text(path):
         manager = PDFResourceManager()
         retstr = io.StringIO()
@@ -47,52 +86,57 @@ def deniz_yatirim(n=5):
         return text
         #
 
-    pdf_file = f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/PDFs/Deniz_yatırım{pdf}.pdf"
+###
+    # Extracting PDF
+    print('Extracting the PDF...')
+    pdf_file = f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/PDFs/Deniz_yatırım/{pdf}.pdf"
     text_list = [pdf_to_text(pdf_file)]
 
-    # ---------------------------------- SETTING THE BOUNDARIES
+    # Determining the boundaries of the pdf
+    print('Setting the boundaries between Basında Çıkan Haberler and KAP ve Şirket Haberleri')
     text = text_list[0].split('Basında Çıkan Haberler')[0]
     text = text.split('KAP ve Şirket Haberleri')[-1]
 
-    # ---------------------------------- TIDYING THE SPLITTED DATA
-    text = text.split('\n')
+    # Cleaning the data (Deleting empty list elements)
+    print('CLEANING THE DATA...')
+    print('Deleting empty list elements.')
+    text = text.split('\n') # Here we splitted the text from each \n and created a list from it named as text.
     text_splitted = []
     for row in text:
-        if row != '':
-            text_splitted.append(row)
-    text_splitted2 = []
-    for row in text_splitted:
         if row != '' and row != ' ' and row != '   ':
-            text_splitted2.append(row)
+            text_splitted.append(row)
 
+    # Deleting irrelevant string elements
+    print('Deleting irrlevant string elements')
     i = 0
     text_splitted3 = []
-    while i in range(0, len(text_splitted2)):
-        if 'DENİZBANK YATIRIM' in text_splitted2[i]:
+    while i in range(0, len(text_splitted)):
+        if 'DENİZBANK YATIRIM' in text_splitted[i]:
             i = i + 3
-        if i in range(0, len(text_splitted2)):
-            text_splitted3.append(text_splitted2[i])
+        if i in range(0, len(text_splitted)):
+            text_splitted3.append(text_splitted[i])
             i = i + 1
 
-    text_splitted2 = text_splitted3
+    text_splitted = text_splitted3
 
-    # ---------------------------------- JOINING THE ROWS
+    # Joining the rows (We splitted the text by \ns above now we are rejoining them by \uf0a7(bullets))
+    print('Joining the text list')
     news_list = []
-    for row in text_splitted2:
+    for row in text_splitted:
         if '\uf0a7' in row:
             news_list.append(row.split('\uf0a7')[-1])
         else:
             news_list[-1] = news_list[-1] + row
 
-        # ----------------------------------- DELETING SEKTÖR NEWS
+    # Deleting Industry news
+    print('Deleting Industry news')
     news_list2 = []
     for row in news_list:
         if ':' in row[0:25] and 'SEKTÖRÜ' not in row[0:25]:
             news_list2.append(row)
         else:
             continue
-
-        # |------------------------------------- GETTING THE CODES AND NEWS SEPERATELY
+    # Writing final lists
     codes = []
     news = []
     date_list = []
@@ -100,7 +144,9 @@ def deniz_yatirim(n=5):
     news_id = []
     time = []
     news_index = 0
+    link = []
     k = 0
+    print('Writing final lists')
     for row in news_list2:
         if ',' in row.split(':', 1)[0]:
             for code in row.split(':', 1)[0].split(','):
@@ -110,6 +156,7 @@ def deniz_yatirim(n=5):
                 araci_kurum.append('Deniz Yatırım')
                 time.append(datetime.datetime.today().now().time())
                 news_id.append(k)
+                link.append(url)
                 k = k + 1
                 print(f'Written news index: {news_index}')
                 news_index = news_index + 1
@@ -121,6 +168,7 @@ def deniz_yatirim(n=5):
                 araci_kurum.append('Deniz Yatırım')
                 time.append(datetime.datetime.today().now().time())
                 news_id.append(k)
+                link.append(url)
                 k = k + 1
                 print(f'Written news index: {news_index}')
                 news_index = news_index + 1
@@ -131,26 +179,77 @@ def deniz_yatirim(n=5):
             araci_kurum.append('Deniz Yatırım')
             time.append(datetime.datetime.today().now().time())
             news_id.append(k)
+            link.append(url)
             k = k + 1
             print(f'Written news index: {news_index}')
             news_index = news_index + 1
 
-        # --------------------------------------------- STRIPPING SPACES
+        # Stripping spaces at the beginning and at the end
     codes2 = []
     for code in codes:
         codes2.append(code.strip())
 
     codes = codes2
 
-    if len(codes) == news_index:
-        print('All data is succesfully written')
+    codes_deneme = codes
 
-    data = pd.read_csv('C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv')
-    last_row = len(data)
-    with open('C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv', 'a', encoding='utf-8', newline="") as fp:
-        wr = csv.writer(fp)
-        for i in range(0,len(codes)):
-            csv_list = [last_row , date_list[i], codes[i], news[i], araci_kurum[i], time[i]]
-            print(csv_list)
-            last_row = last_row + 1
-            wr.writerow(csv_list)
+    if len(codes_deneme) < 1:
+        warnings.warn('* * * * * No news from Deniz Yatırım today * * * * *')
+        post_message_to_slack('\n\n_No news from Deniz Yatırım today_\n\n')
+        return
+
+    df = pd.DataFrame(list(zip(date_list, codes, news, araci_kurum, time, link)))
+    df.columns = ['date_list', 'codes', 'news', 'araci_kurum', 'timestamp', 'link']
+
+    df1 = df
+###
+    first_row_count = df.shape[0]
+    # Hisse Sembolü kontrolü
+    df = df.rename(columns={'codes': 'ISLEM  KODU'})
+    df['ISLEM  KODU'] = df['ISLEM  KODU'].astype(str) + '.E'
+    df_bist = pd.read_csv('C:/Users/berat/Desktop/Ulakfin - Ortak Data/slack_csv/hissesembolu.csv', delimiter=';')
+    df = pd.merge(df, df_bist, on=["ISLEM  KODU"])
+    df = df[['date_list', 'ISLEM  KODU', 'news', 'araci_kurum', 'timestamp', 'link']]
+
+    codes2 = []
+    for i in range(0, len(df['ISLEM  KODU'])):
+        codes2.append(df['ISLEM  KODU'][i].split('.E')[0])
+
+    df['ISLEM  KODU'] = codes2
+    df = df.rename(columns={'ISLEM  KODU': 'codes'})
+    second_row_count = df.shape[0]
+
+    ### NOT TAKEN NEWS
+    frames = [df1, df]
+    merged = pd.concat(frames)
+    not_taken = merged.drop_duplicates(keep=False)
+    if len(not_taken) != 0:
+        not_taken.to_csv(f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/slack_csv_folded/Deniz_Yatırım/{str(datetime.datetime.now().date())}_not_taken.csv", encoding="utf-8",
+                         index=False, header=False, mode='a')
+
+        client = WebClient(token='xoxb-1310569939731-1373479534900-EAQbiKWSTqT0TxoJI7EfM5TP')
+
+        post_message_to_slack('News which are not parsed.')
+        response = client.files_upload(
+            channels="#csv",
+            file=f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/slack_csv_folded/Deniz_Yatırım/{str(datetime.datetime.now().date())}_not_taken.csv",
+            title=f"not taken csv file {datetime.datetime.now().date()}"
+        )
+        ###
+
+
+    # ID Number yazdırma
+    old_df = pd.read_csv("C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv")
+    last_id = old_df['news_id'].iloc[-1]
+    df['news_id'] = range(last_id + 1, last_id + 1 + len(df))
+    df = df[['news_id', 'date_list', 'codes', 'news', 'araci_kurum', 'timestamp', 'link']]
+
+    print(f"{second_row_count} news passed the Stock Name Test from total of {first_row_count} news.")
+    post_message_to_slack(
+        f"*Accuracy:* {second_row_count} news parsed, out of {first_row_count} news scrapped.")
+
+    print(df)
+    df.to_csv("C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv", encoding="utf-8",
+              index=False, header=False, mode='a')
+
+    print('Deniz Yatırım is completed')
