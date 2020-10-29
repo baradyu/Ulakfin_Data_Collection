@@ -1,6 +1,6 @@
-# ------BMD YATIRIM--------------------------#
-def bmd_yatirim(n = 2):
-    # -----------IMPORTS----------#
+def bmd_yatirim():
+    print('BMD Yatırım')
+    # Imports
     import pandas as pd
     import urllib.request
     from selenium import webdriver
@@ -10,18 +10,29 @@ def bmd_yatirim(n = 2):
     from pdfminer.converter import TextConverter
     from pdfminer.layout import LAParams
     import io
-    import openpyxl
     import datetime
-    import csv
+    import selenium
+    import warnings
+    from slack import WebClient
+    print('Modules are imported.')
 
-    print('Importing Modules')
+    slack_token = 'xoxb-1310569939731-1373479534900-EAQbiKWSTqT0TxoJI7EfM5TP'
+    slack_channel = '#csv'
+    slack_icon_url = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTuGqps7ZafuzUsViFGIremEL2a3NR0KO0s0RTCMXmzmREJd5m4MA&s'
+    slack_user_name = 'informer'
+    import requests
+    import json
+    def post_message_to_slack(text, blocks=None):
+        return requests.post('https://slack.com/api/chat.postMessage', {
+            'token': slack_token,
+            'channel': slack_channel,
+            'text': text,
+            'icon_url': slack_icon_url,
+            'username': slack_user_name,
+            'blocks': json.dumps(blocks) if blocks else None
+        }).json()
 
-    DRIVER_PATH = 'C:/Users/berat/webdriver/chromedriver'  # BILGISAYARDA chromedriver'ın bulunduğu yer
-    options = Options()
-    options.headless = True
-    options.add_argument("--window-size=1920,1200")
-    driver = webdriver.Chrome(options=options, executable_path=DRIVER_PATH)
-
+    # PDFMiner function
     def pdf_to_text(path):
         manager = PDFResourceManager()
         retstr = io.StringIO()
@@ -36,31 +47,65 @@ def bmd_yatirim(n = 2):
         device.close()
         retstr.close()
         return text
-    link = "https://www.bmd.com.tr/"
-    driver.get(link)
-    href1 = driver.find_elements_by_xpath('//div/a')[n]
-    url = href1.get_attribute("href")
-    driver.get(url)
-    href2 = driver.find_elements_by_xpath("//div/a[@target='_blank']")[1]
-    url2 = href2.get_attribute("href")
-    pdf = "bmd_yatırım_" + url2.split('pdf')[0][-11:-1]
+
+    # Setting Webdriver
+    DRIVER_PATH = 'C:/Users/berat/webdriver/chromedriver'  # path of webdriver
+    options = Options()
+    options.headless = False
+    options.add_argument("--window-size=1920,1200")
+    driver = webdriver.Chrome(options=options, executable_path=DRIVER_PATH)
+    print('Webdriver is set.')
+
+    # Downloading PDF
+    driver.get('https://www.bmd.com.tr/')
+    print(f'Current webpage : {driver.current_url}')
+
+    try:
+        href2 = driver.find_element_by_xpath('/html/body/div[3]/div/div[3]/div/div[1]/div/div[2]/a[1]')
+    except selenium.common.exceptions.InvalidSelectorException:
+        post_message_to_slack(f"*ERROR_BMD Yatırım:* Cannot get to 'Araştırma Raporları', check URL:{driver.current_url}")
+        raise Exception('Cannot find XPATH \n Check the Xpath of href2')
+
+    link2 = href2.get_attribute('href')
+    print('Getting to the daily news page.')
+    driver.get(link2)
+    print(f'Current webpage : {driver.current_url}')
+    #/html/body/div[4]/div[1]/div/div/div[2]/div[1]/div/div[1]/div/a[2]
+    #/html/body/div[4]/div[1]/div/div/div[2]/div[1]/div/div[1]/div/a[2]
+    try:
+        href1 = driver.find_element_by_xpath('/html/body/div[4]/div[1]/div/div/div[2]/div[1]/div/a')
+    except selenium.common.exceptions.InvalidSelectorException:
+        post_message_to_slack(f'*ERROR-BMD Yatırım:* Could not find news of {datetime.datetime.now().date()}.'
+                              f'\n          _Note: It is possible that it has not been posted on the website yet: {driver.current_url}_ ')
+        raise Exception(f'➢ ERROR_BMD Yatırım Yatırım: Could not find news of {datetime.datetime.now().date()}. \n Note: It is possible that it has not been posted on the website yet: {driver.current_url} ')
+    except selenium.common.exceptions.NoSuchElementException:
+        post_message_to_slack(f'*ERROR-BMD Yatırım:* XPath Error, check xpath')
+        raise Exception(f'➢ ERROR_BMD Yatırım: XPath Error, check xpath')
+
+    url = href1.get_attribute('href')
+    pdf = "bmd_yatırım_" + url.split('pdf')[0][-11:-1]
     print('Downloading PDF')
-    urllib.request.urlretrieve(url2, f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/PDFs/BMD_yatırım/{pdf}.pdf")
-    print('PDF is downloaded')
+
+    try:
+        urllib.request.urlretrieve(url, f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/PDFs/BMD_yatırım/{pdf}.pdf")
+        print('PDF is downloaded')
+    except urllib.error.HTTPError:
+        post_message_to_slack('*ERROR-BMD Yatırım:* The website is probably blocking you from downloading the pdf. \n It is better try it again later')
+        raise Exception('The website is probably blocking you. \n It is better try it again later')
+    post_message_to_slack(f"-{url}")
     pdf_file = f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/PDFs/BMD_yatırım/{pdf}.pdf"
+    driver.close()
 
-    tarih = url2.split('pdf')[0][-11:-1]
-    tarih = tarih.replace('_', '.')
-
-    #
+    # Determining the boundaries of the pdf
+    print('Setting the boundaries between HACİM and ŞİRKET HABERLERİ')
     if 'ŞİRKET HABERLERİ' in pdf_to_text(pdf_file):
-        sirket_haberleri_pattern = '(?<=Şirket Haberleri).*?(?=BİST VERİLERİ)'
         text_list = [pdf_to_text(pdf_file)]
         text_list[0] = text_list[0].split('HACİM')[0]
         text_list[0] = text_list[0].split('ŞİRKET HABERLERİ')[1]
 
-        print('Splitting the text between HACİM and ŞİRKET HABERLERİ')
-
+        # CLEANING THE DATA
+        print('Cleaning the data')
+        # Arranging new lines and deleting empty lines
         text_splitted = text_list[0].split('\n')
         text_splitted = [i for i in text_splitted if i]
 
@@ -69,6 +114,8 @@ def bmd_yatirim(n = 2):
             if row != ' ':
                 text_splitted2.append(row)
 
+        # Joining the for each news
+        print('Joining the rows for each news')
         news_list1 = []
         for row in text_splitted2:
             if 'Haberin etkisi:' in row:
@@ -80,6 +127,7 @@ def bmd_yatirim(n = 2):
         for row in news_list1:
             codes.append(row[0:5])
 
+        # Writing the final lists
         news_id = []
         time = []
         date_list = []
@@ -88,14 +136,17 @@ def bmd_yatirim(n = 2):
         news_index = 0
         k = 0
         codes1 = []
+        link = []
+        print('Writing final lists')
         for i in range(0, len(codes)):
             if '(' in codes[i]:
                 date_list.append(datetime.datetime.now().date())
                 news.append(news_list1[i][5:])
-                codes1.append(codes[i][1:])
+                codes1.append(codes[i].split('(')[1])
                 time.append(datetime.datetime.today().now().time())
                 news_id.append(k)
                 araci_kurum.append('BMD Yatırım')
+                link.append(url)
                 k = k + 1
                 print(f'Written news index: {news_index}')
                 news_index = news_index + 1
@@ -106,29 +157,69 @@ def bmd_yatirim(n = 2):
                 time.append(datetime.datetime.today().now().time())
                 news_id.append(k)
                 araci_kurum.append('BMD Yatırım')
+                link.append(url)
                 k = k + 1
                 print(f'Written news index: {news_index}')
                 news_index = news_index + 1
 
-        if len(codes) == news_index:
-            print('All data is succesfully written')
-
         codes = codes1
 
-        data = pd.read_csv('C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv')
-        last_row = len(data)
-        with open('C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv', 'a', encoding='utf-8', newline="") as fp:
-            wr = csv.writer(fp)
-            if len(codes) < 2:
-                csv_list = [last_row, date_list[0], codes[0], news[0], araci_kurum[0], time[0]]
-                print(csv_list)
-                last_row = last_row + 1
-                wr.writerow(csv_list)
-            else:
-                for i in range(0, len(codes)):
-                    csv_list = [last_row, date_list[i], codes[i], news[i], araci_kurum[i], time[i]]
-                    print(csv_list)
-                    last_row = last_row + 1
-                    wr.writerow(csv_list)
+        df = pd.DataFrame(list(zip(date_list, codes, news, araci_kurum, time, link)))
+        df.columns = ['date_list', 'codes', 'news', 'araci_kurum', 'timestamp', 'link']
+
+        df1 = df
+
+        first_row_count = df.shape[0]
+        # Hisse Sembolü kontrolü
+        df = df.rename(columns={'codes': 'ISLEM  KODU'})
+        df['ISLEM  KODU'] = df['ISLEM  KODU'].astype(str) + '.E'
+        df_bist = pd.read_csv('C:/Users/berat/Desktop/Ulakfin - Ortak Data/slack_csv/hissesembolu.csv', delimiter=';')
+        df = pd.merge(df, df_bist, on=["ISLEM  KODU"])
+        df = df[['date_list', 'ISLEM  KODU', 'news', 'araci_kurum', 'timestamp', 'link']]
+
+        codes2 = []
+        for i in range(0, len(df['ISLEM  KODU'])):
+            codes2.append(df['ISLEM  KODU'][i].split('.E')[0])
+
+        df['ISLEM  KODU'] = codes2
+        df = df.rename(columns={'ISLEM  KODU': 'codes'})
+        second_row_count = df.shape[0]
+
+        ### NOT TAKEN NEWS
+        frames = [df1, df]
+        merged = pd.concat(frames)
+        not_taken = merged.drop_duplicates(keep=False)
+        if len(not_taken) != 0:
+            not_taken.to_csv(
+                f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/slack_csv_folded/BMD_Yatırım/{str(datetime.datetime.now().date())}_not_taken.csv",
+                encoding="utf-8",
+                index=False, header=False, mode='a')
+
+            client = WebClient(token='xoxb-1310569939731-1373479534900-EAQbiKWSTqT0TxoJI7EfM5TP')
+
+            post_message_to_slack('News which are not parsed.')
+            response = client.files_upload(
+                channels="#csv",
+                file=f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/slack_csv_folded/BMD_Yatırım/{str(datetime.datetime.now().date())}_not_taken.csv",
+                title=f"not taken csv file {datetime.datetime.now().date()}"
+            )
+            ###
+
+        # ID Number yazdırma
+        old_df = pd.read_csv("C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv")
+        last_id = old_df['news_id'].iloc[-1]
+        df['news_id'] = range(last_id + 1, last_id + 1 + len(df))
+        df = df[['news_id', 'date_list', 'codes', 'news', 'araci_kurum', 'timestamp', 'link']]
+
+        print(f"{second_row_count} news passed the Stock Name Test from total of {first_row_count} news.")
+        post_message_to_slack(
+            f"*Accuracy:* {second_row_count} news parsed, out of {first_row_count} news scrapped.")
+
+        print(df)
+        df.to_csv("C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv", encoding="utf-8",
+                  index=False, header=False, mode='a')
     else:
-        print('No data from BMD Yatırım Today')
+        warnings.warn('No news from BMD Yatırım today')
+        post_message_to_slack('\n\n_No news from BMD Yatırım today_\n\n')
+
+    print('BMD Yatırım is completed')
