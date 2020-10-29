@@ -1,4 +1,5 @@
 def marbas_func():
+    print('Marbaş Menkul')
     from datetime import date
     import pandas as pd
     import urllib.request
@@ -9,16 +10,33 @@ def marbas_func():
     import io
     import re
     import datetime
-    import csv
+    import requests
+    import json
+    from slack import WebClient
+    print('Modules imported')
 
     #GETTING PDF AS TEXT
     def download_pdf(url):
-        local_filename = url.split('/')[-1]
+        local_filename = f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/PDFs/Marbas_yatırım/{url.split('/')[-1]}"
         class AppURLopener(urllib.request.FancyURLopener):
             version = "Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/47.0.2526.69 Safari/537.36"
         urllib._urlopener = AppURLopener()
         urllib._urlopener.retrieve(url, local_filename)
         return local_filename
+
+    slack_token = 'xoxb-1310569939731-1373479534900-EAQbiKWSTqT0TxoJI7EfM5TP'
+    slack_channel = '#csv'
+    slack_icon_url = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTuGqps7ZafuzUsViFGIremEL2a3NR0KO0s0RTCMXmzmREJd5m4MA&s'
+    slack_user_name = 'informer'
+    def post_message_to_slack(text, blocks=None):
+        return requests.post('https://slack.com/api/chat.postMessage', {
+            'token': slack_token,
+            'channel': slack_channel,
+            'text': text,
+            'icon_url': slack_icon_url,
+            'username': slack_user_name,
+            'blocks': json.dumps(blocks) if blocks else None
+        }).json()
 
     def pdf_to_text(path):
         manager = PDFResourceManager()
@@ -45,94 +63,169 @@ def marbas_func():
     news_id = []
 
     url_date = date.today().strftime("%Y%m%d")
-    marbas_url = f"https://marbasmenkul.com.tr/bultenler/g{url_date}.pdf"
-    marbas = download_pdf(marbas_url)
 
-    pdf_file = f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/{marbas}"
-    sirket_haberleri_pattern = '(?<=Şirket Haberleri).*?(?=Pariteler)'
-    text_list = []
-    sirket_haber_list_1 =[]
-    text_list.append(pdf_to_text(pdf_file))
-    for text in text_list:
-        sirket_haber_list_1.append(re.findall(sirket_haberleri_pattern, text, re.DOTALL))
+    try:
+        print('Getting to the daily news page.')
+        marbas_url = f"https://marbasmenkul.com.tr/bultenler/g{url_date}.pdf"
+        link = f"https://marbasmenkul.com.tr/bultenler/g{url_date}.pdf"
+        print(f'Current webpage : {link}')
+        print('Downloading PDF')
+        post_message_to_slack(f"-{marbas_url}")
+        marbas = download_pdf(marbas_url)
+        print('PDF is downloaded')
+        pdf_file = marbas
+        print('Setting the boundaries between Pariteler and Şirket Haberleri')
+        sirket_haberleri_pattern = '(?<=Şirket Haberleri).*?(?=Pariteler)'
+        text_list = []
+        sirket_haber_list_1 = []
+        text_list.append(pdf_to_text(pdf_file))
+        for text in text_list:
+            sirket_haber_list_1.append(re.findall(sirket_haberleri_pattern, text, re.DOTALL))
 
-    for k in sirket_haber_list_1:
-        whole_text = convert_list_to_string(k)
+        for k in sirket_haber_list_1:
+            whole_text = convert_list_to_string(k)
+        print('Cleaning the data')
+        print(whole_text.splitlines())
+        for line in whole_text.splitlines():
+            if line == '' or line == ' ' or line == '  ' or line.find('Açıklanan Bilançolar') != -1 or line.split()[0].find('VBTS') != -1:
+                a = 2
+            elif line.split()[0].find('*') != -1 and line.split()[0].isupper() == False:
+                a = 2
+            elif line[0] == '*' and line.split()[0].isupper() == True:
+                hisseler.append(line.split()[0][1:])
+                haberler.append(line.split(maxsplit=1)[1])
+            elif line.split()[0].isupper() and line.split()[0].find(',') != -1:
+                hisseler.append(line.split(',')[0])
+                haberler.append(line.split(',', maxsplit=1)[1])
+            elif line.split()[0].find(':') != -1 and line.split()[0].isupper():
+                hisseler.append(line.split(':', maxsplit=1)[0])
+                haberler.append(line.split(':', maxsplit=1)[1])
+            elif line.split()[0].isupper():
+                hisseler.append(line.split()[0])
+                haberler.append(line.split(maxsplit=1)[1])
+            elif len(haberler) != 0 and len(hisseler) == len(haberler):
+                eski = haberler[-1]
+                haberler = haberler[:-1]
+                appnd = eski + line
+                haberler.append(appnd)
 
-    for line in whole_text.splitlines():
-        if line=='' or line==' ' or line=='  ' or line.find('Açıklanan Bilançolar')!=-1:
-            a=2
-        elif line[0]=='*':
-            hisseler.append(line.split()[0][1:])
-            haberler.append(line.split(maxsplit=1)[1])
-        elif line.split()[0].find(':')!=-1 and line.split()[0].isupper():
-            hisseler.append(line.split(':', maxsplit=1)[0])
-            haberler.append(line.split(':', maxsplit=1)[1])
-        elif line.split()[0].isupper():
-            hisseler.append(line.split()[0])
-            haberler.append(line.split(maxsplit=1)[1])
-        elif len(hisseler)==len(haberler):
-            eski = haberler[-1]
-            haberler = haberler[:-1]
-            appnd = eski + line
-            haberler.append(appnd)
-
-    haberler2 = []
-    hisseler2 = []
-    today = datetime.datetime.now().date()
-    for hisse in hisseler:
-        index = hisseler.index(hisse)
-        haber = haberler[index]
-        if hisse.find('/')!=-1:
-            hisseler2.extend(hisse.split('/'))
-            for i in range(0,len(hisse.split('/'))):
+        haberler2 = []
+        hisseler2 = []
+        today = datetime.datetime.now().date()
+        for hisse in hisseler:
+            index = hisseler.index(hisse)
+            haber = haberler[index]
+            if hisse.find('/') != -1:
+                hisseler2.extend(hisse.split('/'))
+                for i in range(0, len(hisse.split('/'))):
+                    haberler2.append(haber)
+                    tarih.append(today)
+                    bulten.append("MARBAS")
+            else:
+                hisseler2.append(hisse)
                 haberler2.append(haber)
                 tarih.append(today)
                 bulten.append("MARBAS")
-        else:
-            hisseler2.append(hisse)
-            haberler2.append(haber)
-            tarih.append(today)
-            bulten.append("MARBAS")
 
-    timestamp = []
-    for q in hisseler2:
-        timestamp.append(datetime.datetime.today().now().time())
-        c = 0
-        news_id.append(c)
-        c = c + 1
+        timestamp = []
+        for q in hisseler2:
+            timestamp.append(datetime.datetime.today().now().time())
+            c = 0
+            news_id.append(c)
+            c = c + 1
 
-    hisseler3 = []
-    for hisse in hisseler2:
-        if hisse.find('-')!=-1:
-            hisseler3.append(hisse[:-1])
-        else:
-            hisseler3.append(hisse)
+        hisseler3 = []
+        for hisse in hisseler2:
+            if hisse.find('-') != -1:
+                hisseler3.append(hisse[:-1])
+            elif hisse.find('.')!=-1:
+                hisseler3.append(hisse.split('.')[0])
+            else:
+                hisseler3.append(hisse)
 
-    news1 = []
-    for i in range(0, len(haberler2)):
-        news_pr = haberler2[i].split('\n')
-        news_pr_strip = []
-        for k in range(0, len(news_pr)):
-            news_pr_strip.append(news_pr[k].strip())
-        news1.append(" ".join(news_pr_strip))
-    haberler2 = news1
+        news1 = []
+        for i in range(0, len(haberler2)):
+            news_pr = haberler2[i].split('\n')
+            news_pr_strip = []
+            for k in range(0, len(news_pr)):
+                news_pr_strip.append(news_pr[k].strip())
+            news1.append(" ".join(news_pr_strip))
+        haberler2 = news1
 
-    hisseler_df = pd.DataFrame(columns=[''], data=hisseler3)
-    haberler_df = pd.DataFrame(columns=[''], data=haberler2)
-    tarih_df = pd.DataFrame(columns=[''], data=tarih)
-    bulten_df = pd.DataFrame(columns=[''], data=bulten)
-    timestamp_df = pd.DataFrame(columns=[''], data=timestamp)
-    stored_df = pd.concat([tarih_df, hisseler_df, haberler_df, bulten_df, timestamp_df], axis=1)
+        link2 = link
+        link = []
+        for h in hisseler3:
+            link.append(link2)
 
-    data = pd.read_csv("C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv")
-    last_row = len(data)
-    with open("C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv", 'a', encoding='utf-8', newline="") as fp:
-        wr = csv.writer(fp)
-        for i in range(0, len(hisseler3)):
-            csv_list = [last_row, tarih[i], hisseler3[i], haberler2[i], bulten[i], timestamp[i]]
-            print(csv_list)
-            last_row = last_row + 1
-            wr.writerow(csv_list)
+        hisseler_df = pd.DataFrame(columns=[''], data=hisseler3)
+        haberler_df = pd.DataFrame(columns=[''], data=haberler2)
+        tarih_df = pd.DataFrame(columns=[''], data=tarih)
+        bulten_df = pd.DataFrame(columns=[''], data=bulten)
+        timestamp_df = pd.DataFrame(columns=[''], data=timestamp)
+        stored_df = pd.concat([tarih_df, hisseler_df, haberler_df, bulten_df, timestamp_df], axis=1)
 
-    return stored_df
+        print('Writing the daily data to csv')
+        date_list = tarih
+        codes = hisseler3
+        news = haberler2
+        araci_kurum = bulten
+        df = pd.DataFrame(list(zip(date_list, codes, news, araci_kurum, timestamp, link)))
+        df.columns = ['date_list', 'codes', 'news', 'araci_kurum', 'timestamp', 'link']
+
+        df1 = df
+
+        first_row_count = df.shape[0]
+        # Hisse Sembolü kontrolü
+        df = df.rename(columns={'codes': 'ISLEM  KODU'})
+        df['ISLEM  KODU'] = df['ISLEM  KODU'].astype(str) + '.E'
+        df_bist = pd.read_csv('C:/Users/berat/Desktop/Ulakfin - Ortak Data/slack_csv/hissesembolu.csv', delimiter=';')
+        df = pd.merge(df, df_bist, on=["ISLEM  KODU"])
+        df = df[['date_list', 'ISLEM  KODU', 'news', 'araci_kurum', 'timestamp', 'link']]
+
+        codes2 = []
+        for i in range(0, len(df['ISLEM  KODU'])):
+            codes2.append(df['ISLEM  KODU'][i].split('.E')[0])
+
+        df['ISLEM  KODU'] = codes2
+        df = df.rename(columns={'ISLEM  KODU': 'codes'})
+        second_row_count = df.shape[0]
+
+        ### NOT TAKEN NEWS
+        frames = [df1, df]
+        merged = pd.concat(frames)
+        not_taken = merged.drop_duplicates(keep=False)
+        if len(not_taken) != 0:
+            not_taken.to_csv(
+                f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/slack_csv_folded/Marbaş_Yatırım/{str(datetime.datetime.now().date())}_not_taken.csv",
+                encoding="utf-8",
+                index=False, header=False, mode='a')
+
+            client = WebClient(token='xoxb-1310569939731-1373479534900-EAQbiKWSTqT0TxoJI7EfM5TP')
+
+            post_message_to_slack('News which are not parsed.')
+            response = client.files_upload(
+                channels="#csv",
+                file=f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/slack_csv_folded/Marbaş_Yatırım/{str(datetime.datetime.now().date())}_not_taken.csv",
+                title=f"not taken csv file {datetime.datetime.now().date()}"
+            )
+            ###
+
+        # ID Number yazdırma
+        old_df = pd.read_csv("C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv")
+        last_id = old_df['news_id'].iloc[-1]
+        df['news_id'] = range(last_id + 1, last_id + 1 + len(df))
+        df = df[['news_id', 'date_list', 'codes', 'news', 'araci_kurum', 'timestamp', 'link']]
+
+        print(f"{second_row_count} news passed the Stock Name Test from total of {first_row_count} news.")
+        post_message_to_slack(
+            f"*Accuracy:* {second_row_count} news parsed, out of {first_row_count} news scrapped.")
+
+        print(df)
+        df.to_csv("C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv", encoding="utf-8",
+                  index=False, header=False, mode='a')
+
+        print('Marbaş Menkul is completed')
+        return stored_df
+    except ValueError:
+        print('No data from Marbaş Menkul today')
+        post_message_to_slack('\n\n_No news from Marbaş Yatırım today_\n\n')
