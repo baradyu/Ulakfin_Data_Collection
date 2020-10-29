@@ -2,7 +2,7 @@ def ziraat_yatirim():
     import requests
     import io
     import re
-    from datetime import date
+    from pdfminer.pdfparser import PDFSyntaxError
     from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
     from pdfminer.pdfpage import PDFPage
     from pdfminer.converter import TextConverter
@@ -10,9 +10,26 @@ def ziraat_yatirim():
     import numpy as np
     import pandas as pd
     from itertools import chain
-    from selenium import webdriver
-    from fuzzywuzzy import process
-    from datetime import datetime
+    import datetime
+    import json
+    from slack import WebClient
+
+    slack_token = 'xoxb-1310569939731-1373479534900-EAQbiKWSTqT0TxoJI7EfM5TP'
+    slack_channel = '#csv'
+    slack_icon_url = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTuGqps7ZafuzUsViFGIremEL2a3NR0KO0s0RTCMXmzmREJd5m4MA&s'
+    slack_user_name = 'informer'
+
+    def post_message_to_slack(text, blocks=None):
+        return requests.post('https://slack.com/api/chat.postMessage', {
+            'token': slack_token,
+            'channel': slack_channel,
+            'text': text,
+            'icon_url': slack_icon_url,
+            'username': slack_user_name,
+            'blocks': json.dumps(blocks) if blocks else None
+        }).json()
+
+    print('Modules imported.')
 
     # FONKSİYONLAR
 
@@ -49,128 +66,183 @@ def ziraat_yatirim():
     def chainer_2(s):
         return list(chain.from_iterable(s.str.split('/')))
 
-    # Şirket adı, hisse ismi eşleştirme
-    def fuzzy_merge(df_1, df_2, key1, key2, threshold=90, limit=2):
-        s = df_2[key2].tolist()
-
-        m = df_1[key1].apply(lambda x: process.extract(x, s, limit=limit))
-        df_1['matches'] = m
-
-        m2 = df_1['matches'].apply(lambda x: ', '.join([j[0] for j in x if j[1] >= threshold]))
-        df_1['matches'] = m2
-
-        return df_1
-
 
     # Bugün'ün tarihi
-    today = date.today()
-    timestamp = datetime.now()
-
-    driver_path = 'C:/Users/berat/webdriver/chromedriver'
-    driver = webdriver.Chrome(executable_path = driver_path)
+    today = datetime.datetime.today().now().date()
+    timestamp = datetime.datetime.today().now().time()
 
     # ZİRAAT YATIRIM MENKUL DEĞERLER A.Ş.
 
     araci_kurum = 'ZİRAAT YATIRIM MENKUL DEĞERLER A.Ş.'
 
+    print("Downloading PDF...")
     # PDF'i indirme
-    driver.get("https://www.ziraatyatirim.com.tr/TRK/sabah-stratejisi")
-    href_xpath = '//*[@id="pdfView"]/li/a'
-    href = driver.find_element_by_xpath(href_xpath)
-    url = href.get_attribute("href")
-    r = requests.get(url)
-    filename = f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/PDFs/Piramit_yatırım/piramit_{today}.pdf"
-    open(filename, 'wb').write(r.content)
+    ziraat_today = today.strftime("%d-%m-%y")
+    url = f"https://www.ziraatyatirim.com.tr/documents/SS_{ziraat_today}.pdf"
+    try:
+        r = requests.get(url)
+        filename = f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/PDFs/Ziraat_yatırım/ziraat_{today}.pdf"
+        post_message_to_slack(f"-{url}")
+        open(filename, 'wb').write(r.content)
+        print(f"PDF is downloaded from {url}")
 
-    # PDF'i text'e yazdırma
-    ziraat_text_list_1 = [pdf_to_text(filename)]
+        # PDF'i text'e yazdırma
+        ziraat_text_list_1 = [pdf_to_text(filename)]
 
-    # Düzenleme
-    ziraat_text_list_2 = []
-    for element in ziraat_text_list_1:
-        ziraat_text_list_2.append(element.replace('\n \n', '\n\n'))
+        # Düzenleme
+        ziraat_text_list_2 = []
+        for element in ziraat_text_list_1:
+            ziraat_text_list_2.append(element.replace('\n \n', '\n\n'))
 
-    # Ziraat için patternlar
-    sirket_haberleri_pattern_1 = '\([A-Z][A-Z][A-Z][A-Z]+,.*?(?=\\n\\n)'
-    sirket_haberleri_pattern_2 = '\([A-Z][A-Z][A-Z][A-Z]+\).*?(?=\\n\\n)'
+        # Ziraat için patternlar
+        sirket_haberleri_pattern_1 = '\([A-Z][A-Z][A-Z][A-Z]+,.*?(?=\\n\\n\\n)'
+        sirket_haberleri_pattern_2 = '\([A-Z][A-Z][A-Z][A-Z]+\).*?(?=\\n\\n\\n)'
 
-    # Şirket Haberlerini çekme
-    ziraat_haber_list_1 = []
-    for element in ziraat_text_list_2:
-        if bool(re.search(r'ŞİRKET HABERLERİ', element)):
-            ziraat_haber_list_1.append(re.findall(sirket_haberleri_pattern_1, element, re.DOTALL))
-            ziraat_haber_list_1.append(re.findall(sirket_haberleri_pattern_2, element, re.DOTALL))
-        else:
-            print("Bugün Ziraat Yatırım'da şirket haberi yok.")
+        print("Parsing codes and Haber...")
+        # Şirket Haberlerini çekme
+        ziraat_haber_list_1 = []
+        for element in ziraat_text_list_2:
+            if bool(re.search(r'ŞİRKET HABERLERİ', element)):
+                ziraat_haber_list_1.append(re.findall(sirket_haberleri_pattern_1, element, re.DOTALL))
+                ziraat_haber_list_1.append(re.findall(sirket_haberleri_pattern_2, element, re.DOTALL))
+                print("Parsing codes and news are completed.")
+            else:
+                post_message_to_slack('\n\n_No news from Ziraat Yatırım today_\n\n')
 
-    # Haber sayısını hesaplama
-    ziraat_lengths = []
-    for element in ziraat_haber_list_1:
-        ziraat_lengths.append(len(element))
 
-    # Hisse Sembolü ve Haber'i ayırma
-    ziraat_haber_list_2 = []
-    for elements in ziraat_haber_list_1:
-        for element in elements:
-            ziraat_haber_list_2.append(element.split(':', maxsplit=1))
+        # Haber sayısını hesaplama
+        ziraat_lengths = []
+        for element in ziraat_haber_list_1:
+            ziraat_lengths.append(len(element))
 
-    # Tarih, Aracı Kurum ve URL yazdırma
-    ziraat_tarih_list = []
-    ziraat_araci_kurum_list = []
-    ziraat_url_list = []
-    ziraat_timestamp_list = []
-    for i in range(len(ziraat_lengths)):
-        ziraat_tarih_list.append([[today]] * ziraat_lengths[i])
-        ziraat_araci_kurum_list.append([[araci_kurum]] * ziraat_lengths[i])
-        ziraat_url_list.append([[url]] * ziraat_lengths[i])
-        ziraat_timestamp_list.append([[timestamp]] * ziraat_lengths[i])
+        # Hisse Sembolü ve Haber'i ayırma
+        ziraat_haber_list_2 = []
+        for elements in ziraat_haber_list_1:
+            for element in elements:
+                ziraat_haber_list_2.append(element.split(':', maxsplit=1))
 
-    # Listeleri tek boyutlu yapma
-    ziraat_tarih_list = flatten(ziraat_tarih_list)
-    ziraat_araci_kurum_list = flatten(ziraat_araci_kurum_list)
-    ziraat_url_list = flatten(ziraat_url_list)
-    ziraat_timestamp_list = flatten(ziraat_timestamp_list)
+        # Tarih, Aracı Kurum ve URL yazdırma
+        ziraat_tarih_list = []
+        ziraat_araci_kurum_list = []
+        ziraat_url_list = []
+        ziraat_timestamp_list = []
+        for i in range(len(ziraat_lengths)):
+            ziraat_tarih_list.append([[today]] * ziraat_lengths[i])
+            ziraat_araci_kurum_list.append([[araci_kurum]] * ziraat_lengths[i])
+            ziraat_url_list.append([[url]] * ziraat_lengths[i])
+            ziraat_timestamp_list.append([[timestamp]] * ziraat_lengths[i])
 
-    # Columnları yazdırma
-    col_1_and_2 = pd.DataFrame(ziraat_haber_list_2, columns=['codes', 'news'])  # Hisse Sembolü ve Haber
-    col_3 = pd.DataFrame(ziraat_tarih_list, columns=['date_list'])  # Tarih
-    col_4 = pd.DataFrame(ziraat_araci_kurum_list, columns=['araci_kurum'])  # Aracı Kurum
-    col_6 = pd.DataFrame(ziraat_timestamp_list, columns=['timestamp'])  # Timestamp
+        if len(ziraat_haber_list_1) > 0:
+            print("date_list, araci_kurum, timestamp and link are written.")
 
-    # Columnları birleştirme
-    df = pd.concat([col_1_and_2, col_3, col_4, col_6], axis=1)
-    df = df.dropna()
+            # Listeleri tek boyutlu yapma
+            ziraat_tarih_list = flatten(ziraat_tarih_list)
+            ziraat_araci_kurum_list = flatten(ziraat_araci_kurum_list)
+            ziraat_url_list = flatten(ziraat_url_list)
+            ziraat_timestamp_list = flatten(ziraat_timestamp_list)
 
-    # Hisse Sembolü'nden parantezleri çıkarma
-    df['codes'] = df['codes'].str.extract(r"\((.*?)\)", expand=False)
+            # Columnları yazdırma
+            col_1_and_2 = pd.DataFrame(ziraat_haber_list_2, columns=['codes', 'news'])  # Hisse Sembolü ve Haber
+            col_3 = pd.DataFrame(ziraat_tarih_list, columns=['date_list'])  # Tarih
+            col_4 = pd.DataFrame(ziraat_araci_kurum_list, columns=['araci_kurum'])  # Aracı Kurum
+            col_5 = pd.DataFrame(ziraat_timestamp_list, columns=['timestamp'])  # Timestamp
+            col_6 = pd.DataFrame(ziraat_url_list, columns=['link'])  # URL
 
-    # Aynı haberi birden fazla şirket için yazdırma
-    lens = df['codes'].str.split(',').map(len)
-    df = pd.DataFrame({'codes': chainer_1(df['codes']),
-                       'news': np.repeat(df['news'], lens),
-                       'date_list': np.repeat(df['date_list'], lens),
-                       'araci_kurum': np.repeat(df['araci_kurum'], lens),
-                       'timestamp': np.repeat(df['timestamp'], lens)})
+            # Columnları birleştirme
+            df = pd.concat([col_1_and_2, col_3, col_4, col_5, col_6], axis=1)
+            df['codes'] = df['codes'].str.replace(',\\nNötr',' ')
+            print(df['codes'])
+            df = df.dropna()
 
-    # Baştaki sondaki boşlukları silme
-    df['codes'] = df['codes'].str.strip()
-    df['news'] = df['news'].str.strip()
+            # Hisse Sembolü'nden parantezleri çıkarma
+            df['codes'] = df['codes'].str.extract(r"\((.*?)\)", expand=False)
 
-    # Hisse sembolü dışındakileri silme
-    df = df[df['codes'].str.contains('[A-Z][A-Z][A-Z][A-Z]+')]
+            # Aynı haberi birden fazla şirket için yazdırma
+            lens = df['codes'].str.split(',').map(len)
+            df = pd.DataFrame({'codes': chainer_1(df['codes']),
+                               'news': np.repeat(df['news'], lens),
+                               'date_list': np.repeat(df['date_list'], lens),
+                               'araci_kurum': np.repeat(df['araci_kurum'], lens),
+                               'timestamp': np.repeat(df['timestamp'], lens),
+                               'link': np.repeat(df['link'], lens)})
 
-    # Satırları düzenleme
-    df = df.replace(r'\s', ' ', regex=True)
+            # Baştaki sondaki boşlukları silme
+            df['codes'] = df['codes'].str.strip()
+            df['news'] = df['news'].str.strip()
 
-    # Fazla boşlukları silme
-    df['news'] = df['news'].replace('  ', ' ', regex=True)
-    df['news'] = df['news'].replace('   ', ' ', regex=True)
+            # Hisse sembolü dışındakileri silme
+            df = df[df['codes'].str.contains('[A-Z][A-Z][A-Z][A-Z]+')]
 
-    # ID Number yazdırma
-    old_df = pd.read_csv("C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv")
-    last_id = old_df['news_id'].iloc[-1]
-    df['news_id'] = range(last_id + 1, last_id + 1 + len(df))
+            # Satırları düzenleme
+            df = df.replace(r'\s', ' ', regex=True)
 
-    df = df[['news_id', 'date_list', 'codes', 'news', 'araci_kurum', 'timestamp']]
+            # Fazla boşlukları silme
+            df['news'] = df['news'].replace('  ', ' ', regex=True)
+            df['news'] = df['news'].replace('   ', ' ', regex=True)
 
-    df.to_csv("C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv", encoding="utf-8", index=False, header=False, mode='a')
+            df1 = df
+
+            ### NOT TAKEN NEWS
+            frames = [df1, df]
+            merged = pd.concat(frames)
+            not_taken = merged.drop_duplicates(keep=False)
+            if len(not_taken) != 0:
+                not_taken.to_csv(
+                    f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/slack_csv_folded/Ziraat_Yatırım/{str(datetime.datetime.now().date())}_not_taken.csv",
+                    encoding="utf-8",
+                    index=False, header=False, mode='a')
+
+                client = WebClient(token='xoxb-1310569939731-1373479534900-EAQbiKWSTqT0TxoJI7EfM5TP')
+
+                post_message_to_slack('News which are not parsed.')
+                response = client.files_upload(
+                    channels="#csv",
+                    file=f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/slack_csv_folded/Ziraat_Yatırım/{str(datetime.datetime.now().date())}_not_taken.csv",
+                    title=f"not taken csv file {datetime.datetime.now().date()}"
+                )
+                ###
+
+            # ID Number yazdırma
+            old_df = pd.read_csv("C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv")
+            last_id = old_df['news_id'].iloc[-1]
+            df['news_id'] = range(last_id + 1, last_id + 1 + len(df))
+
+            df = df[['news_id', 'date_list', 'codes', 'news', 'araci_kurum', 'timestamp', 'link']]
+
+            first_row_count = df.shape[0]
+
+            # Hisse Sembolü kontrolü
+            df = df.rename(columns={'codes': 'ISLEM  KODU'})
+            df['ISLEM  KODU'] = df['ISLEM  KODU'].astype(str) + '.E'
+            df_bist = pd.read_csv('C:/Users/berat/Desktop/Ulakfin - Ortak Data/slack_csv/hissesembolu.csv',
+                                  delimiter=';')
+            df = pd.merge(df, df_bist, on=["ISLEM  KODU"])
+            df = df[['date_list', 'ISLEM  KODU', 'news', 'araci_kurum', 'timestamp', 'link']]
+
+            codes2 = []
+            for i in range(0, len(df['ISLEM  KODU'])):
+                codes2.append(df['ISLEM  KODU'][i].split('.E')[0])
+
+            df['ISLEM  KODU'] = codes2
+            df = df.rename(columns={'ISLEM  KODU': 'codes'})
+            second_row_count = df.shape[0]
+
+            # ID Number yazdırma
+            old_df = pd.read_csv("C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv")
+            last_id = old_df['news_id'].iloc[-1]
+            df['news_id'] = range(last_id + 1, last_id + 1 + len(df))
+            df = df[['news_id', 'date_list', 'codes', 'news', 'araci_kurum', 'timestamp', 'link']]
+
+            print(f"{second_row_count} news passed the Stock Name Test from total of {first_row_count} news.")
+            post_message_to_slack(
+                f"*Accuracy:* {second_row_count} news parsed out of {first_row_count} news scrapped.")
+
+            print(df)
+            df.to_csv("C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv", encoding="utf-8",
+                      index=False, header=False, mode='a')
+
+    except PDFSyntaxError:
+        print('URL pattern might be changed, check the URL.')
+        post_message_to_slack('*ERROR-Ziraat:* URL pattern might be changed, check the URL.')
+
+    print("Ziraat Yatırım Menkul Değerler is completed.")
