@@ -1,0 +1,157 @@
+from slack_csv_folded.A1Capital import a1capital_scrapper
+from slack_csv_folded.BMD_Yatırım import bmd_yatırım_scrapper
+from slack_csv_folded.Deniz_Yatırım import deniz_yatırım_scrapper
+from slack_csv_folded.Gedik_Yatırım import gedik_yatırım_scrapper
+from slack_csv_folded.İnfo_Yatırım import info_yatırım_scrapper
+from slack_csv_folded.Oyak_Yatırım import oyak_yatırım_scrapper
+from slack_csv_folded.Piramit_Yatırım import piramit_yatirim_scrapper
+from slack_csv_folded.Tacirler_Yatırım import tacirler_yatırım_scrapper
+from slack_csv_folded.Vakıf_Yatırım import vakıf_yatırım_scrapper
+from slack_csv_folded.Ziraat_Yatırım import ziraat_yatırım_scrapper
+from slack_csv_folded.Halk_Yatırım import halk_yatırım_scrapper
+from slack_csv_folded.İş_Yatırım import is_yatırım_scrapper
+from slack_csv_folded.Metro_Yatırım import metro_yatırım_scrapper
+from slack_csv_folded.Marbaş_Yatırım import marbas_yatırım_scrapper
+from slack_csv_folded.HSBC_Yatırım import hsbc_yatırım_scrapper
+from slack_messages.slack_intro import slack_intro
+
+from slack import WebClient
+import datetime
+import requests
+import json
+
+#SLACK FUNCTION
+slack_token = 'xoxb-1310569939731-1373479534900-EAQbiKWSTqT0TxoJI7EfM5TP'
+slack_channel = '#csv'
+slack_icon_url = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTuGqps7ZafuzUsViFGIremEL2a3NR0KO0s0RTCMXmzmREJd5m4MA&s'
+slack_user_name = 'informer'
+
+
+def post_message_to_slack(text, blocks=None):
+    return requests.post('https://slack.com/api/chat.postMessage', {
+        'token': slack_token,
+        'channel': slack_channel,
+        'text': text,
+        'icon_url': slack_icon_url,
+        'username': slack_user_name,
+        'blocks': json.dumps(blocks) if blocks else None
+    }).json()
+
+
+slack_intro()
+
+# A1Capital
+post_message_to_slack('*1-A1Capital*')
+try:
+    a1capital_scrapper.a1capital()
+except:
+    post_message_to_slack('_ERROR-A1Capital: an unexpected error has occurred, moving on..._')
+
+# BMD Yatırım
+post_message_to_slack('*2-BMD Yatırım*')
+try:
+    bmd_yatırım_scrapper.bmd_yatirim()
+except:
+    post_message_to_slack('_ERROR-BMD Yatırım: an unexpected error has occurred, moving on..._')
+
+# Deniz Yatırım
+post_message_to_slack('*3-Deniz Yatırım*')
+try:
+    deniz_yatırım_scrapper.deniz_yatirim()
+except:
+    post_message_to_slack('_ERROR-Deniz Yatırım: an unexpected error has occurred, moving on..._')
+
+# Gedik Yatırım
+post_message_to_slack('*4-Gedik Yatırım*')
+try:
+    gedik_yatırım_scrapper.gedik_yatırım()
+except:
+    post_message_to_slack('_ERROR-Gedik Yatırım: an unexpected error has occurred, moving on..._')
+
+# İnfo Yatırım
+post_message_to_slack('*5-İnfo Yatırım*')
+try:
+    info_yatırım_scrapper.info_yatirim()
+except:
+    post_message_to_slack('_ERROR-Info Yatırım: an unexpected error has occurred, moving on..._')
+
+# Oyak Yatırım
+post_message_to_slack('*6-Oyak Yatırım*')
+try:
+    oyak_yatırım_scrapper.oyak_yatirim()
+except:
+    post_message_to_slack('_ERROR-Oyak Yatırım: an unexpected error has occurred, moving on..._')
+
+# Piramit Yatırım
+post_message_to_slack('*7-Piramit Yatırım*')
+try:
+    piramit_yatirim_scrapper.piramit_yatirim()
+except:
+    post_message_to_slack('_ERROR-Piramit Yatırım: an unexpected error has occurred, moving on..._')
+
+# Tacirler Yatırım
+post_message_to_slack('*8-Tacirler Yatırım*')
+try:
+    tacirler_yatırım_scrapper.tacirler_yatirim()
+except:
+    post_message_to_slack('_ERROR-Tacirler Yatırım: an unexpected error has occurred, moving on..._')
+
+# Vakıf Yatırım
+post_message_to_slack('*9-Vakıf Yatırım*')
+try:
+    vakıf_yatırım_scrapper.vakif_yatirim()
+except:
+    post_message_to_slack('_ERROR-Vakıf Yatırım: an unexpected error has occurred, moving on..._')
+
+# Ziraat Yatırım
+post_message_to_slack('*10-Ziraat Yatırım*')
+try:
+    ziraat_yatırım_scrapper.ziraat_yatirim()
+except:
+    post_message_to_slack('_ERROR-Ziraat Yatırım: an unexpected error has occurred, moving on..._')
+
+# Halk Yatırım
+post_message_to_slack('*11-Halk Yatırım*')
+try:
+    halk_yatırım_scrapper.halk_func()
+except:
+    post_message_to_slack('_ERROR-Halk Yatırım: an unexpected error has occurred, moving on..._')
+
+# İş Yatırım
+post_message_to_slack('*12-İş Yatırım*')
+try:
+    is_yatırım_scrapper.is_func()
+except:
+    post_message_to_slack('_ERROR-İş Yatırım: an unexpected error has occurred, moving on..._')
+
+# Metro Yatırım
+post_message_to_slack('*13-Metro Yatırım*')
+try:
+    metro_yatırım_scrapper.metro_func()
+except:
+    post_message_to_slack('_ERROR-Metro Yatırım: an unexpected error has occurred, moving on..._')
+
+# HSBC Yatırım
+post_message_to_slack('*14-HSBC Yatırım*')
+try:
+    hsbc_yatırım_scrapper.hsbc_func()
+except:
+    post_message_to_slack('_ERROR-HSBC Yatırım: an unexpected error has occured, moving on..._')
+
+# Marbas Yatırım
+post_message_to_slack('*14-Marbaş Yatırım*')
+try:
+    marbas_yatırım_scrapper.marbas_func()
+except:
+    post_message_to_slack('_ERROR-Marbaş Yatırım: an unexpected error has occurred, moving on..._')
+
+
+client = WebClient(token='xoxb-1310569939731-1373479534900-EAQbiKWSTqT0TxoJI7EfM5TP')
+
+response = client.files_upload(
+  channels="#csv",
+  file="C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv",
+  title=f"CSV FILE {datetime.datetime.now().date()}"
+)
+
+post_message_to_slack('END')
