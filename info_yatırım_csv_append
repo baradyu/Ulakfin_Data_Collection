@@ -1,6 +1,7 @@
 
 def info_yatirim():
-    # -----------IMPORTS----------#
+    print('İnfo Yatırım')
+    # Imports
     import pandas as pd
     from selenium import webdriver
     from selenium.webdriver.chrome.options import Options
@@ -9,29 +10,57 @@ def info_yatirim():
     from selenium.webdriver.support import expected_conditions as EC
     from selenium.webdriver.common.by import By
     import datetime
-    import openpyxl
-    import csv
     import time
+    import warnings
+    from slack import WebClient
+    print('Modules Imported.')
 
-    print('Importing Modules')
+    slack_token = 'xoxb-1310569939731-1373479534900-EAQbiKWSTqT0TxoJI7EfM5TP'
+    slack_channel = '#csv'
+    slack_icon_url = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTuGqps7ZafuzUsViFGIremEL2a3NR0KO0s0RTCMXmzmREJd5m4MA&s'
+    slack_user_name = 'informer'
+    import requests
+    import json
+    def post_message_to_slack(text, blocks=None):
+        return requests.post('https://slack.com/api/chat.postMessage', {
+            'token': slack_token,
+            'channel': slack_channel,
+            'text': text,
+            'icon_url': slack_icon_url,
+            'username': slack_user_name,
+            'blocks': json.dumps(blocks) if blocks else None
+        }).json()
 
+    # Setting webdriver
+    print('Setting webdriver')
     DRIVER_PATH = 'C:/Users/berat/webdriver/chromedriver'  # BILGISAYARDA chromedriver'ın bulunduğu yer
     options = Options()
-    options.headless = True
+    options.headless = False
     options.add_argument("--window-size=1920,1200")
     driver = webdriver.Chrome(options=options, executable_path=DRIVER_PATH)
+    print('Webdriver is set.')
 
-    top_bulten_xpath = "//*[@id='post-19576']/div/div/div/div/div/div[2]/div/div/div/div/div[1]/" \
-                       "div/div/div[1]/div/div/div/div[5]/div[1]/div/a/div/img"
     time.sleep(2)
-    driver.get("https://infoyatirim.com/hisse-viop-bulteni/page/1/")
-    time.sleep(2)
-    driver.find_element_by_xpath(top_bulten_xpath).click()
-    time.sleep(2)
+    # Getting to the webpage
+    driver.get("https://infoyatirim.com/hisse-viop-bulteni/")
+    print(f'Current webpage : {driver.current_url}')
+    time.sleep(5)
+    # Getting to the daily news page.
+    print('Getting to the daily news page.')
+    top_bulten_xpath = driver.find_element_by_xpath("//*[@id='post-19576']/div/div/div/div/div/div[2]/div/div/div/div"
+                                                    "/div[1]/div/div/div[1]/div/div/div/div[5]/div[2]/header/div/h4/a")
+    try:
+        url = top_bulten_xpath.get_attribute("href")
+        driver.get(url)
+    except:
+        post_message_to_slack(f'*ERROR-İnfo Yatırım:* Could not find news of {datetime.datetime.now().date()}. \n Note: It is possible that it has not been posted on the website yet: {driver.current_url} ')
+        raise Exception(f'➢ ERROR_İnfo Yatırım: Could not find news of {datetime.datetime.now().date()}. \n Note: It is possible that it has not been posted on the website yet: {driver.current_url} ')
+    time.sleep(10)
     src = driver.find_element_by_css_selector("iframe").get_attribute("src")
-    time.sleep(2)
+    time.sleep(10)
     driver.get(src)
-    time.sleep(2)
+    print(f'Current webpage : {driver.current_url}')
+    time.sleep(10)
     try:
         WebDriverWait(driver, timeout=20).until(
             EC.visibility_of_all_elements_located((By.XPATH, "//table/tbody/tr/td/ul/li/b/span")))
@@ -39,12 +68,18 @@ def info_yatirim():
         print("Timed out waiting for page to load")
         driver.quit()
 
-    sirket_haberleri = driver.find_elements_by_xpath("/html/body/table[2]/tbody/tr[3]/td/ul/li")
+    post_message_to_slack(f"-{driver.current_url}")
     news_list1 = []
     news_list1_codes = []
     date_list = []
     araci_kurum = []
-
+    # Parsing 'Sirket Haberleri'
+    sirket_haberleri = driver.find_elements_by_xpath("/html/body/table[2]/tbody/tr[3]/td/ul/li")
+    if len(sirket_haberleri) < 1:
+        post_message_to_slack(f"*Warning: There is not 'Şirket Haberi' today.*"
+                              f"\n          _check URL:_{driver.current_url}")
+        warnings.warn(f"➢Cannot find 'Şirket Haberleri', check URL:{driver.current_url}")
+    print("Parsing 'Sirket Haberleri'")
     for news in sirket_haberleri:
         try:
             if '&' in news.find_element_by_xpath('./b/span').text:
@@ -65,8 +100,9 @@ def info_yatirim():
                 date_list.append(datetime.datetime.now().date())
                 araci_kurum.append('İnfo Yatırım')
         except:
-            print('xd')
+            print('Parsing firms with more than one news')
         finally:
+            # Parsing firms with more than one news
             sub_news_list1 = news.find_elements_by_xpath('./ul/li')
             for snews in sub_news_list1:
                 if '–' in snews.find_element_by_xpath('./span').text:
@@ -77,21 +113,108 @@ def info_yatirim():
                 date_list.append(datetime.datetime.now().date())
                 araci_kurum.append('İnfo Yatırım')
 
-    # data1 - Sirket haberleri
+    print("Parsing 'Pay Alım Satım Haberleri'")
+    pay_alim_satim_haberleri = driver.find_elements_by_xpath("/html/body/table[2]/tbody/tr[5]/td/ul/li")
+    if len(pay_alim_satim_haberleri) < 1:
+        post_message_to_slack(f"*Warning: There is not 'Pay Alım Satım Haberi' today.*"
+                              f"\n          _check URL:_{driver.current_url}")
+        warnings.warn(f"➢Cannot find 'Pay Alım Satım Haberleri', check URL:{driver.current_url}")
+    for news in pay_alim_satim_haberleri:
+        try:
+            if '&' in news.find_element_by_xpath('./b/span').text:
+                for i in range(0, len(news.find_element_by_xpath('./b/span').text.split(' &'))):
+                    news_list1_codes.append(news.find_element_by_xpath('./b/span').text.split('–')[0].split(' &')[i])
+                    if '–' in news.find_element_by_xpath('./span').text:
+                        news_list1.append(news.find_element_by_xpath('./span').text[1:].strip())
+                    else:
+                        news_list1.append(news.find_element_by_xpath('./span').text)
+                    date_list.append(datetime.datetime.now().date())
+                    araci_kurum.append('İnfo Yatırım')
+            else:
+                if '–' in news.find_element_by_xpath('./span').text:
+                    news_list1.append(news.find_element_by_xpath('./span').text[1:].strip())
+                else:
+                    news_list1.append(news.find_element_by_xpath('./span').text)
+                news_list1_codes.append(news.find_element_by_xpath('./b/span').text.split('–')[0])
+                date_list.append(datetime.datetime.now().date())
+                araci_kurum.append('İnfo Yatırım')
+        except:
+            print('Parsing firms with more than one news')
+        finally:
+            # Parsing firms with more than one news
+            sub_news_list1 = news.find_elements_by_xpath('./ul/li')
+            for snews in sub_news_list1:
+                if '–' in snews.find_element_by_xpath('./span').text:
+                    news_list1.append(snews.find_element_by_xpath('./span').text[1:].strip())
+                else:
+                    news_list1.append(snews.find_element_by_xpath('./span').text)
+                news_list1_codes.append(news.find_element_by_xpath('./b/span').text.split('–')[0])
+                date_list.append(datetime.datetime.now().date())
+                araci_kurum.append('İnfo Yatırım')
+
+    print("Parsing 'Sermaye Artırım Haberleri'")
+    sermaye_artirim_haberleri = driver.find_elements_by_xpath("/html/body/table[2]/tbody/tr[7]/td/ul/li")
+    if len(sermaye_artirim_haberleri) < 1:
+        post_message_to_slack(f"*Warning: There is not 'Sermaye Artırım Haberi' today.*"
+                              f"\n          _check URL:_{driver.current_url}")
+        warnings.warn(f"➢Cannot find 'Sermaye Artırım Haberleri', check URL:{driver.current_url}")
+    for news in sermaye_artirim_haberleri:
+        try:
+            if '&' in news.find_element_by_xpath('./b/span').text:
+                for i in range(0, len(news.find_element_by_xpath('./b/span').text.split(' &'))):
+                    news_list1_codes.append(news.find_element_by_xpath('./b/span').text.split('–')[0].split(' &')[i])
+                    if '–' in news.find_element_by_xpath('./span').text:
+                        news_list1.append(news.find_element_by_xpath('./span').text[1:].strip())
+                    else:
+                        news_list1.append(news.find_element_by_xpath('./span').text)
+                    date_list.append(datetime.datetime.now().date())
+                    araci_kurum.append('İnfo Yatırım')
+            else:
+                if '–' in news.find_element_by_xpath('./span').text:
+                    news_list1.append(news.find_element_by_xpath('./span').text[1:].strip())
+                else:
+                    news_list1.append(news.find_element_by_xpath('./span').text)
+                news_list1_codes.append(news.find_element_by_xpath('./b/span').text.split('–')[0])
+                date_list.append(datetime.datetime.now().date())
+                araci_kurum.append('İnfo Yatırım')
+        except:
+            print('Parsing firms with more than one news')
+        finally:
+            # Parsing firms with more than one news
+            sub_news_list1 = news.find_elements_by_xpath('./ul/li')
+            for snews in sub_news_list1:
+                if '–' in snews.find_element_by_xpath('./span').text:
+                    news_list1.append(snews.find_element_by_xpath('./span').text[1:].strip())
+                else:
+                    news_list1.append(snews.find_element_by_xpath('./span').text)
+                news_list1_codes.append(news.find_element_by_xpath('./b/span').text.split('–')[0])
+                date_list.append(datetime.datetime.now().date())
+                araci_kurum.append('İnfo Yatırım')
+
+    # Deleting empty rows
     data1 = pd.DataFrame(list(zip(date_list, news_list1_codes, news_list1)))
     data1.index = news_list1_codes
-    data1.columns = ['date', 'code', 'sentiment']
+    try:
+        data1.columns = ['date', 'code', 'sentiment']
+    except ValueError:
+        warnings.warn('* * * * * No news from İnfo Yatırım today * * * * *')
+        post_message_to_slack('\n\n_No news from Info Yatırım today_\n\n')
+        return
+
     data1 = data1[data1.sentiment != '']
 
     codes = data1['code'].tolist()
     news = data1['sentiment'].tolist()
 
+    # Writing final lists
+    print('Writing final lists')
     codes1 = []
     news1 = []
     time1 = []
     news_id = []
     date1 = []
     araci_kurum1 = []
+    link = []
     k = 0
     news_index = 0
     for i in range(0, len(codes)):
@@ -103,6 +226,7 @@ def info_yatirim():
                 news_id.append(k)
                 date1.append((datetime.datetime.now().date()))
                 araci_kurum1.append('İnfo Yatırım')
+                link.append(driver.current_url)
                 k = k + 1
                 print(f'Written news index: {news_index}')
                 news_index = news_index + 1
@@ -113,6 +237,7 @@ def info_yatirim():
             news_id.append(k)
             date1.append((datetime.datetime.now().date()))
             araci_kurum1.append('İnfo Yatırım')
+            link.append(driver.current_url)
             k = k + 1
             print(f'Written news index: {news_index}')
             news_index = news_index + 1
@@ -123,13 +248,58 @@ def info_yatirim():
     date_list = date1
     araci_kurum = araci_kurum1
 
-    data = pd.read_csv('C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv')
-    last_row = len(data)
-    with open('C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv', 'a', encoding='utf-8', newline="") as fp:
-        wr = csv.writer(fp)
-        for i in range(0,len(codes)):
-            csv_list = [last_row, date_list[i], codes[i], news[i], araci_kurum[i], time[i]]
-            print(csv_list)
-            last_row = last_row + 1
-            wr.writerow(csv_list)
+    df = pd.DataFrame(list(zip(date_list, codes, news, araci_kurum, time, link)))
+    df.columns = ['date_list', 'codes', 'news', 'araci_kurum', 'timestamp', 'link']
 
+    df1 = df
+
+    first_row_count = df.shape[0]
+    # Hisse Sembolü kontrolü
+    df = df.rename(columns={'codes': 'ISLEM  KODU'})
+    df['ISLEM  KODU'] = df['ISLEM  KODU'].astype(str) + '.E'
+    df_bist = pd.read_csv('C:/Users/berat/Desktop/Ulakfin - Ortak Data/slack_csv/hissesembolu.csv', delimiter=';')
+    df = pd.merge(df, df_bist, on=["ISLEM  KODU"])
+    df = df[['date_list', 'ISLEM  KODU', 'news', 'araci_kurum', 'timestamp', 'link']]
+
+    codes2 = []
+    for i in range(0, len(df['ISLEM  KODU'])):
+        codes2.append(df['ISLEM  KODU'][i].split('.E')[0])
+
+    df['ISLEM  KODU'] = codes2
+    df = df.rename(columns={'ISLEM  KODU': 'codes'})
+    second_row_count = df.shape[0]
+
+    ### NOT TAKEN NEWS
+    frames = [df1, df]
+    merged = pd.concat(frames)
+    not_taken = merged.drop_duplicates(keep=False)
+    if len(not_taken) != 0:
+        not_taken.to_csv(f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/slack_csv_folded/İnfo_Yatırım/{str(datetime.datetime.now().date())}_not_taken.csv", encoding="utf-8",
+                         index=False, header=False, mode='a')
+
+        client = WebClient(token='xoxb-1310569939731-1373479534900-EAQbiKWSTqT0TxoJI7EfM5TP')
+
+        post_message_to_slack('News which are not parsed.')
+        response = client.files_upload(
+            channels="#csv",
+            file=f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/slack_csv_folded/İnfo_Yatırım/{str(datetime.datetime.now().date())}_not_taken.csv",
+            title=f"not taken csv file {datetime.datetime.now().date()}"
+        )
+        ###
+
+    # ID Number yazdırma
+    old_df = pd.read_csv("C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv")
+    last_id = old_df['news_id'].iloc[-1]
+    df['news_id'] = range(last_id + 1, last_id + 1 + len(df))
+    df = df[['news_id', 'date_list', 'codes', 'news', 'araci_kurum', 'timestamp', 'link']]
+
+    print(f"{second_row_count} news passed the Stock Name Test from total of {first_row_count} news.")
+    post_message_to_slack(
+        f"*Accuracy:* {second_row_count} news parsed, out of {first_row_count} news scrapped.")
+
+    print(df)
+    df.to_csv("C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv", encoding="utf-8",
+              index=False, header=False, mode='a')
+    driver.close()
+
+    print('İnfo Yatırım is completed')
