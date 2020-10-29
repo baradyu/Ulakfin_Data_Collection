@@ -1,4 +1,5 @@
 def is_func():
+    print('İş Yatırım')
     import requests as req
     import pandas as pd
     from selenium import webdriver
@@ -9,8 +10,37 @@ def is_func():
     import io
     import re
     import datetime
-    import csv
-    import urllib.request
+    import requests
+    import json
+    from slack import WebClient
+    from selenium.webdriver.support.ui import Select
+    import time
+    print('Modules imported')
+
+
+    #GETTING PDF AS TEXT
+    def download_pdf(url):
+        local_filename = f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/PDFs/Is_yatırım/{url.split('/')[-1]}"
+
+        with req.get(url) as r:
+            with open(local_filename, 'wb') as f:
+                f.write(r.content)
+
+        return  local_filename
+
+    slack_token = 'xoxb-1310569939731-1373479534900-EAQbiKWSTqT0TxoJI7EfM5TP'
+    slack_channel = '#csv'
+    slack_icon_url = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTuGqps7ZafuzUsViFGIremEL2a3NR0KO0s0RTCMXmzmREJd5m4MA&s'
+    slack_user_name = 'informer'
+    def post_message_to_slack(text, blocks=None):
+        return requests.post('https://slack.com/api/chat.postMessage', {
+            'token': slack_token,
+            'channel': slack_channel,
+            'text': text,
+            'icon_url': slack_icon_url,
+            'username': slack_user_name,
+            'blocks': json.dumps(blocks) if blocks else None
+        }).json()
 
     def pdf_to_text(path):
         manager = PDFResourceManager()
@@ -33,23 +63,23 @@ def is_func():
     option = webdriver.ChromeOptions()
     option.add_argument("--incognito")
     driver = webdriver.Chrome(executable_path='C:/Users/berat/webdriver/chromedriver', options=option)
+    print('Webdriver is set.')
+    print('Getting to the daily news page.')
+    driver.get(
+        'https://www.isyatirim.com.tr/tr-tr/analiz/arastirma-raporlari/Sayfalar/default.aspx#Default=%7B%22k%22%3A%22%22%2C%22r%22%3A%5B%7B%22n%22%3A%22ContentLanguage%22%2C%22t%22%3A%5B%22%5C%22TR%5C%22%22%5D%2C%22o%22%3A%22and%22%2C%22k%22%3Afalse%2C%22m%22%3Anull%7D%5D%2C%22o%22%3A%5B%7B%22d%22%3A1%2C%22p%22%3A%22ReportDate%22%7D%5D%7D')
+    select = Select(driver.find_element_by_id("ddlRaporAnaKategoriler"))
+    select.select_by_visible_text('Piyasalarda Bugün')
+    time.sleep(2)
+    href = driver.find_element_by_xpath(
+        '/html/body/form/div[4]/div/div[2]/div/div/div[1]/div/div[3]/div/div[3]/div/div[1]/div/div/div[2]/div/div[1]/div/div[2]/div[1]/a')
+    is_url = href.get_attribute('href')
+    print('Downloading PDF')
+    isy = download_pdf(is_url)
+    print('PDF is downloaded')
 
-    for c in range(1,11):
-        click_xpath = f"//form/div[4]/div/div[2]/div/div/div[1]/div/div[3]/div/div[3]/div/div[1]/div/div/div[2]/div/div[1]/div/div[2]/div[{c}]"
-        driver.get("https://www.isyatirim.com.tr/tr-tr/analiz/arastirma-raporlari/Sayfalar/default.aspx#Default=%7B%22k%22%3A%22%22%2C%22r%22%3A%5B%7B%22n%22%3A%22ContentLanguage%22%2C%22t%22%3A%5B%22%5C%22TR%5C%22%22%5D%2C%22o%22%3A%22and%22%2C%22k%22%3Afalse%2C%22m%22%3Anull%7D%5D%2C%22o%22%3A%5B%7B%22d%22%3A1%2C%22p%22%3A%22ReportDate%22%7D%5D%7D")
-        check = driver.find_element_by_xpath(click_xpath)
-        checktxt = check.text
-        if checktxt.find('Piyasalarda Bugün')!=-1:
-            driver.find_element_by_xpath(click_xpath).click()
-            driver.switch_to.window(driver.window_handles[-1])
-            is_url = driver.current_url
-            ##
-            pdf = 'is_yatirim_' + is_url.split('pdf')[0][-12:-19]
-            urllib.request.urlretrieve(is_url,f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/PDFs/Is_yatırım/{pdf}.pdf")
-            break
-##
-    pdf_file = f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/PDFs/Is_yatırım/{pdf}.pdf"
-    ##
+    post_message_to_slack(f"-{is_url}")
+    pdf_file = isy
+    print('Setting the boundaries between Ajanda & Piyasa Verileri Linkleri and Sirket Haberleri')
     sirket_haberleri_pattern = '(?<=Sirket Haberleri).*?(?=Ajanda & Piyasa Verileri Linkleri)'
     text_list = []
     sirket_haber_list_1 =[]
@@ -64,7 +94,7 @@ def is_func():
     tarih=[]
     bulten=[]
     today = datetime.datetime.now().date()
-
+    print('Cleaning the data')
     if text.count('@isyatirim.com.tr')>1:
         mail_split = text.split('@isyatirim.com.tr')
         kapanis_split = []
@@ -85,9 +115,9 @@ def is_func():
     else:
         mail_split = text.split('@isyatirim.com.tr')
         for i in mail_split:
-            if i.find('Kapanış (TL)')!=-1:
-                a = i.split('Kapanış (TL)')
-                hisseler.append(a[0])
+            if i.find(' TI Equity') != -1:
+                a = i.split(' TI Equity')
+                hisseler.append(a[0].split()[-1])
                 tarih.append(today)
                 bulten.append('İş')
             else:
@@ -119,19 +149,82 @@ def is_func():
         news1.append(" ".join(news_pr_strip))
     haberler2 = news1
 
-    #CREATING DATAFRAME
-    hisseler_df = pd.DataFrame(columns=['codes'], data=hisseler)
-    haberler_df = pd.DataFrame(columns=['news'], data=haberler2)
-    tarih_df = pd.DataFrame(columns=['date_list'], data=tarih)
-    bulten_df = pd.DataFrame(columns=['araci_kurum'], data=bulten)
-    timestamp_df = pd.DataFrame(columns=['timestamp'], data=timestamp)
+    link = []
+    for h in hisseler:
+        link.append(is_url)
 
-    data = pd.read_csv('C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv')
-    last_row = len(data) + 1
-    with open('C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv', 'a', encoding='utf-8', newline="") as fp:
-        wr = csv.writer(fp)
-        for i in range(0, len(hisseler)):
-            csv_list = [last_row, tarih[i], hisseler[i], haberler2[i], bulten[i], timestamp[i]]
-            print(csv_list)
-            last_row = last_row + 1
-            wr.writerow(csv_list)
+    # CREATING DATAFRAME
+    hisseler_df = pd.DataFrame(columns=[''], data=hisseler)
+    haberler_df = pd.DataFrame(columns=[''], data=haberler2)
+    tarih_df = pd.DataFrame(columns=[''], data=tarih)
+    bulten_df = pd.DataFrame(columns=[''], data=bulten)
+    timestamp_df = pd.DataFrame(columns=[''], data=timestamp)
+    stored_df = pd.concat([tarih_df, hisseler_df, haberler_df, bulten_df, timestamp_df], axis=1)
+
+    if len(hisseler)==0:
+        print('No data from İş Yatırım today')
+        print('İş Yatırım is completed')
+        post_message_to_slack('\n\n_No news from İş Yatırım today_\n\n')
+    else:
+        print('Writing the daily data to csv')
+        date_list = tarih
+        codes = []
+        for row in hisseler:
+            codes.append(row.strip())
+        news = haberler2
+        araci_kurum = bulten
+        df = pd.DataFrame(list(zip(date_list, codes, news, araci_kurum, timestamp, link)))
+        df.columns = ['date_list', 'codes', 'news', 'araci_kurum', 'timestamp', 'link']
+
+        df1 = df
+
+        first_row_count = df.shape[0]
+        # Hisse Sembolü kontrolü
+        df = df.rename(columns={'codes': 'ISLEM  KODU'})
+        df['ISLEM  KODU'] = df['ISLEM  KODU'].astype(str) + '.E'
+        df_bist = pd.read_csv('C:/Users/berat/Desktop/Ulakfin - Ortak Data/slack_csv/hissesembolu.csv', delimiter=';')
+        df = pd.merge(df, df_bist, on=["ISLEM  KODU"])
+        df = df[['date_list', 'ISLEM  KODU', 'news', 'araci_kurum', 'timestamp', 'link']]
+
+        codes2 = []
+        for i in range(0, len(df['ISLEM  KODU'])):
+            codes2.append(df['ISLEM  KODU'][i].split('.E')[0])
+
+        df['ISLEM  KODU'] = codes2
+        df = df.rename(columns={'ISLEM  KODU': 'codes'})
+        second_row_count = df.shape[0]
+
+        ### NOT TAKEN NEWS
+        frames = [df1, df]
+        merged = pd.concat(frames)
+        not_taken = merged.drop_duplicates(keep=False)
+        if len(not_taken) != 0:
+            not_taken.to_csv(
+                f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/slack_csv_folded/İş_Yatırım/{str(datetime.datetime.now().date())}_not_taken.csv",
+                encoding="utf-8",
+                index=False, header=False, mode='a')
+
+            client = WebClient(token='xoxb-1310569939731-1373479534900-EAQbiKWSTqT0TxoJI7EfM5TP')
+
+            post_message_to_slack('News which are not parsed.')
+            response = client.files_upload(
+                channels="#csv",
+                file=f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/slack_csv_folded/İş_Yatırım/{str(datetime.datetime.now().date())}_not_taken.csv",
+                title=f"not taken csv file {datetime.datetime.now().date()}"
+            )
+            ###
+
+        # ID Number yazdırma
+        old_df = pd.read_csv("C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv")
+        last_id = old_df['news_id'].iloc[-1]
+        df['news_id'] = range(last_id + 1, last_id + 1 + len(df))
+        df = df[['news_id', 'date_list', 'codes', 'news', 'araci_kurum', 'timestamp', 'link']]
+
+        print(f"{second_row_count} news passed the Stock Name Test from total of {first_row_count} news.")
+        post_message_to_slack(
+            f"*Accuracy:* {second_row_count} news parsed, out of {first_row_count} news scrapped.")
+
+        print(df)
+        df.to_csv("C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv", encoding="utf-8",
+                  index=False, header=False, mode='a')
+        print('İş Yatırım is completed')
