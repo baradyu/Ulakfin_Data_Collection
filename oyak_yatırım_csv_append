@@ -1,9 +1,8 @@
 def oyak_yatirim():
-    import os
     import requests
     import io
     import re
-    from datetime import date
+    from pdfminer.pdfparser import PDFSyntaxError
     from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
     from pdfminer.pdfpage import PDFPage
     from pdfminer.converter import TextConverter
@@ -11,9 +10,26 @@ def oyak_yatirim():
     import numpy as np
     import pandas as pd
     from itertools import chain
-    from selenium import webdriver
-    from fuzzywuzzy import process
-    from datetime import datetime
+    import datetime
+    import json
+    from slack import WebClient
+
+    slack_token = 'xoxb-1310569939731-1373479534900-EAQbiKWSTqT0TxoJI7EfM5TP'
+    slack_channel = '#csv'
+    slack_icon_url = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTuGqps7ZafuzUsViFGIremEL2a3NR0KO0s0RTCMXmzmREJd5m4MA&s'
+    slack_user_name = 'informer'
+
+    def post_message_to_slack(text, blocks=None):
+        return requests.post('https://slack.com/api/chat.postMessage', {
+            'token': slack_token,
+            'channel': slack_channel,
+            'text': text,
+            'icon_url': slack_icon_url,
+            'username': slack_user_name,
+            'blocks': json.dumps(blocks) if blocks else None
+        }).json()
+
+    print('Modules imported.')
 
     # FONKSİYONLAR
 
@@ -44,146 +60,185 @@ def oyak_yatirim():
             return []
 
     # Aynı haberi birden fazla hisse için yazma
-    def chainer_1(s):
-        return list(chain.from_iterable(s.str.split(',')))
-
     def chainer_2(s):
         return list(chain.from_iterable(s.str.split('/')))
 
-    # Şirket adı, hisse ismi eşleştirme
-    def fuzzy_merge(df_1, df_2, key1, key2, threshold=90, limit=2):
-        s = df_2[key2].tolist()
-
-        m = df_1[key1].apply(lambda x: process.extract(x, s, limit=limit))
-        df_1['matches'] = m
-
-        m2 = df_1['matches'].apply(lambda x: ', '.join([j[0] for j in x if j[1] >= threshold]))
-        df_1['matches'] = m2
-
-        return df_1
-
 
     # Bugün'ün tarihi
-    today = date.today()
-    timestamp = datetime.now()
-
-    driver_path = 'C:/Users/berat/webdriver/chromedriver'
-    driver = webdriver.Chrome(executable_path = driver_path)
+    today = datetime.datetime.today().now().date()
+    timestamp = datetime.datetime.today().now().time()
 
     # OYAK YATIRIM MENKUL DEĞERLER A.Ş.
 
     araci_kurum = 'OYAK YATIRIM MENKUL DEĞERLER A.Ş.'
 
+    print("Downloading PDF...")
     # PDF'i indirme
     oyak_today = today.strftime("%Y%m%d")
     url = f"https://www.oyakyatirim.com.tr/Reports/DownloadFile?fileUrl=gunluk_bulten_{oyak_today}.pdf"
-    r = requests.get(url)
-###########################
-    filename = f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/PDFs/Oyak_yatırım/oyak_{today}.pdf"
-###########################
-    open(filename, 'wb').write(r.content)
+    try:
+        r = requests.get(url)
+        filename = f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/PDFs/Oyak_yatırım/oyak_{today}.pdf"
+        open(filename, 'wb').write(r.content)
+        post_message_to_slack(f"-{url}")
+        print(f"PDF is downloaded from {url}")
+        # PDF'i text'e yazdırma
+        oyak_text_list_1 = [pdf_to_text(filename)]
 
-    # PDF'i text'e yazdırma
-    oyak_text_list_1 = [pdf_to_text(filename)]
+        # Düzenleme
+        oyak_text_list_2 = []
+        for element in oyak_text_list_1:
+            oyak_text_list_2.append(element.replace('\n \n', '\n\n'))
 
-    # Düzenleme
-    oyak_text_list_2 = []
-    for element in oyak_text_list_1:
-        oyak_text_list_2.append(element.replace('\n \n','\n\n'))
+        # Oyak için patternlar
 
-    # Oyak için patternlar
+        sirket_haberleri = '(?<=ŞİRKET HABERLERİ).*?(?=[A-Z]+\s[A-Z][A-Z][A-Z][A-Z][A-Z][A-Z]+)'
+        sirket_haberleri_pattern_1 = '[A-Z][A-Z][A-Z][A-Z]+:.*?(?=\\n\\n)'
 
-    sirket_haberleri_pattern_1 = '(?<=ŞİRKET HABERLERİ).*?(?=[A-Z]+\s[A-Z][A-Z][A-Z][A-Z][A-Z][A-Z]+)'
+        print("Parsing codes and news...")
+        # Haberlerin olduğu kısmı text'e yazma
+        try:
+            oyak_haber_text_1 = []
+            for element in oyak_text_list_2:
+                oyak_haber_text_1.append(re.findall(sirket_haberleri, element, re.DOTALL)[1])
+            print("Parsing codes and news are completed.")
 
-    # Haberlerin olduğu kısmı text'e yazma
-    oyak_haber_text_1 = []
-    for element in oyak_text_list_2:
-        if bool(re.search(sirket_haberleri_pattern_1, element, re.DOTALL)):
-            oyak_haber_text_1.append(re.findall(sirket_haberleri_pattern_1, element, re.DOTALL)[1])
-        else: print("Bugün Oyak Yatırım'da şirket haberi yok.")
+            # Şirket Haberlerini çekme
+            oyak_haber_list_1 = []
+            for element in oyak_haber_text_1:
+                oyak_haber_list_1.append(re.findall(sirket_haberleri_pattern_1, element, re.DOTALL))
 
-    # Şirket Haberlerini çekme
-    oyak_haber_list_1 = []
-    for element in oyak_haber_text_1:
-        oyak_haber_list_1.append(re.split('\n\n', element))
+            for element in oyak_haber_list_1:
+                while '' in element:
+                    element.remove('')
+                while ' ' in element:
+                    element.remove(' ')
 
-    for element in oyak_haber_list_1:
-        while '' in element:
-            element.remove('')
-        while ' ' in element:
-            element.remove(' ')
+            # Haber sayısını hesaplama
+            oyak_lengths = []
+            for element in oyak_haber_list_1:
+                oyak_lengths.append(len(element))
 
-    # Haber sayısını hesaplama
-    oyak_lengths = []
-    for element in oyak_haber_list_1:
-        oyak_lengths.append(len(element))
+            # Hisse Sembolü ve Haber'i ayırma
+            oyak_haber_list_2 = []
+            for elements in oyak_haber_list_1:
+                for element in elements:
+                    if bool(re.search(r'[A-Z]:', element)):
+                        oyak_haber_list_2.append(element.split(':', maxsplit=1))
+                    else:
+                        oyak_haber_list_2.append(element.split(' \\n', 1))
 
-    # Hisse Sembolü ve Haber'i ayırma
-    oyak_haber_list_2 = []
-    for elements in oyak_haber_list_1:
-        for element in elements:
-            if bool(re.search("[A-Z]:", element)):
-                oyak_haber_list_2.append(element.split(':', maxsplit = 1))
-            else: oyak_haber_list_2.append(element.split(' \\n', 1))
+            # Tarih, Aracı Kurum ve URL yazdırma
+            oyak_tarih_list = []
+            oyak_araci_kurum_list = []
+            oyak_timestamp_list = []
+            oyak_url_list = []
+            for i in range(len(oyak_lengths)):
+                oyak_tarih_list.append([[today]] * oyak_lengths[i])
+                oyak_araci_kurum_list.append([[araci_kurum]] * oyak_lengths[i])
+                oyak_timestamp_list.append([[timestamp]] * oyak_lengths[i])
+                oyak_url_list.append([[url]] * oyak_lengths[i])
+            print("date_list, araci_kurum, timestamp and link are written.")
 
-    # Tarih, Aracı Kurum ve URL yazdırma
-    oyak_tarih_list = []
-    oyak_araci_kurum_list = []
-    oyak_timestamp_list = []
-    for i in range(len(oyak_lengths)):
-        oyak_tarih_list.append([[today]] * oyak_lengths[i])
-        oyak_araci_kurum_list.append([[araci_kurum]] * oyak_lengths[i])
-        oyak_timestamp_list.append([[timestamp]] * oyak_lengths[i])
+            # Listeleri tek boyutlu yapma
+            oyak_tarih_list = flatten(oyak_tarih_list)
+            oyak_araci_kurum_list = flatten(oyak_araci_kurum_list)
+            oyak_timestamp_list = flatten(oyak_timestamp_list)
+            oyak_url_list = flatten(oyak_url_list)
 
-    # Listeleri tek boyutlu yapma
-    oyak_tarih_list = flatten(oyak_tarih_list)
-    oyak_araci_kurum_list = flatten(oyak_araci_kurum_list)
-    oyak_timestamp_list = flatten(oyak_timestamp_list)
+            # Columnları yazdırma
+            col_1_and_2 = pd.DataFrame(oyak_haber_list_2, columns=['codes', 'news'])  # Hisse Sembolü ve Haber
+            col_3 = pd.DataFrame(oyak_tarih_list, columns=['date_list'])  # Tarih
+            col_4 = pd.DataFrame(oyak_araci_kurum_list, columns=['araci_kurum'])  # Aracı Kurum
+            col_5 = pd.DataFrame(oyak_timestamp_list, columns=['timestamp'])  # Timestamp
+            col_6 = pd.DataFrame(oyak_url_list, columns=['link'])  # URL
 
-    # Columnları yazdırma
-    col_1_and_2 = pd.DataFrame(oyak_haber_list_2, columns = ['codes','news']) # Hisse Sembolü ve Haber
-    col_3 = pd.DataFrame(oyak_tarih_list, columns = ['date_list']) # Tarih
-    col_4 = pd.DataFrame(oyak_araci_kurum_list, columns = ['araci_kurum']) # Aracı Kurum
-    col_6 = pd.DataFrame(oyak_timestamp_list, columns = ['timestamp']) # Timestamp
+            # Columnları birleştirme
+            df = pd.concat([col_1_and_2, col_3, col_4, col_5, col_6], axis=1)
 
-    # Columnları birleştirme
-    df = pd.concat([col_1_and_2,col_3,col_4,col_6], axis= 1)
+            # Baştaki sondaki boşlukları silme
+            df['codes'] = df['codes'].str.strip()
+            df['news'] = df['news'].str.strip()
 
-    # Baştaki sondaki boşlukları silme
-    df['codes'] = df['codes'].str.strip()
-    df['news'] = df['news'].str.strip()
+            # Aynı haberi birden fazla şirket için yazdırma
+            lens = df['codes'].str.split('/').map(len)
+            df = pd.DataFrame({'codes': chainer_2(df['codes']),
+                               'news': np.repeat(df['news'], lens),
+                               'date_list': np.repeat(df['date_list'], lens),
+                               'araci_kurum': np.repeat(df['araci_kurum'], lens),
+                               'timestamp': np.repeat(df['timestamp'], lens),
+                               'link': np.repeat(df['link'], lens)})
 
-    # Aynı haberi birden fazla şirket için yazdırma
-    lens = df['codes'].str.split('/').map(len)
-    df = pd.DataFrame({'codes' : chainer_2(df['codes']),
-                        'news': np.repeat(df['news'], lens),
-                         'date_list': np.repeat(df['date_list'], lens),
-                       'araci_kurum' : np.repeat(df['araci_kurum'],lens),
-                       'timestamp' : np.repeat(df['timestamp'],lens)})
+            # Satırları düzenleme
+            df = df.replace(r'\s', ' ', regex=True)
 
-    # Satırları düzenleme
-    df = df.replace(r'\s', ' ', regex=True)
+            # Fazla boşlukları silme
+            df['news'] = df['news'].replace('  ', ' ', regex=True)
+            df['news'] = df['news'].replace('   ', ' ', regex=True)
 
-    # Fazla boşlukları silme
-    df['news'] = df['news'].replace('  ', ' ', regex=True)
-    df['news'] = df['news'].replace('   ', ' ', regex=True)
+            df1 = df
 
-    # ID Number yazdırma
-#
-#
-####################
-    old_df = pd.read_csv("C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv")
-####################
-#
-#
-    last_id = len(old_df['news_id'])
-    df['news_id'] = range(last_id + 1, last_id + len(df) + 1)
+            first_row_count = df.shape[0]
+            # Hisse Sembolü kontrolü
+            df = df.rename(columns={'codes': 'ISLEM  KODU'})
+            df['ISLEM  KODU'] = df['ISLEM  KODU'].astype(str) + '.E'
+            df_bist = pd.read_csv('C:/Users/berat/Desktop/Ulakfin - Ortak Data/slack_csv/hissesembolu.csv',
+                                  delimiter=';')
+            df = pd.merge(df, df_bist, on=["ISLEM  KODU"])
+            df = df[['date_list', 'ISLEM  KODU', 'news', 'araci_kurum', 'timestamp', 'link']]
 
-    df = df[['news_id', 'date_list', 'codes', 'news', 'araci_kurum', 'timestamp']]
-#
-#
-###############
-    df.to_csv("C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv", encoding="utf-8", index=False, header=False, mode='a')
-###############
-#
-#
+            codes2 = []
+            for i in range(0, len(df['ISLEM  KODU'])):
+                codes2.append(df['ISLEM  KODU'][i].split('.E')[0])
+
+            df['ISLEM  KODU'] = codes2
+            df = df.rename(columns={'ISLEM  KODU': 'codes'})
+            second_row_count = df.shape[0]
+
+            ### NOT TAKEN NEWS
+            frames = [df1, df]
+            merged = pd.concat(frames)
+            not_taken = merged.drop_duplicates(keep=False)
+            if len(not_taken) != 0:
+                not_taken.to_csv(
+                    f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/slack_csv_folded/Oyak_Yatırım/{str(datetime.datetime.now().date())}_not_taken.csv",
+                    encoding="utf-8",
+                    index=False, header=False, mode='a')
+
+                client = WebClient(token='xoxb-1310569939731-1373479534900-EAQbiKWSTqT0TxoJI7EfM5TP')
+
+                post_message_to_slack('News which are not parsed.')
+                response = client.files_upload(
+                    channels="#csv",
+                    file=f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/slack_csv_folded/Oyak_Yatırım/{str(datetime.datetime.now().date())}_not_taken.csv",
+                    title=f"not taken csv file {datetime.datetime.now().date()}"
+                )
+                ###
+
+            # ID Number yazdırma
+            old_df = pd.read_csv("C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv")
+            last_id = old_df['news_id'].iloc[-1]
+            df['news_id'] = range(last_id + 1, last_id + 1 + len(df))
+            df = df[['news_id', 'date_list', 'codes', 'news', 'araci_kurum', 'timestamp', 'link']]
+
+            print(f"{second_row_count} news passed the Stock Name Test from total of {first_row_count} news.")
+            post_message_to_slack(
+                f"*Accuracy:* {second_row_count} news parsed out of {first_row_count} news scrapped.")
+
+            print(df)
+            df.to_csv("C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv", encoding="utf-8",
+                      index=False, header=False, mode='a')
+
+
+        except IndexError:
+            print("There is no news in Oyak Yatırım Menkul Değerler today.")
+            print("Warning: This error might be showing up if Oyak Yatırım starts to publish 'Şirket Haberleri' in only one section, currently they are publishing it in two sections.")
+            post_message_to_slack('\n\n_No news from Oyak Yatırım today_\n\n')
+            post_message_to_slack("*Warning:* This error might be showing up if Oyak Yatırım starts to publish 'Şirket Haberleri' in only one section, currently they are publishing it in two sections.")
+
+
+    except PDFSyntaxError:
+        print('URL pattern might be changed, check the URL.')
+        post_message_to_slack('*ERROR-Oyak:* URL pattern might be changed, check the URL.')
+
+    print("Oyak Yatırım Menkul Değerler is completed.")
