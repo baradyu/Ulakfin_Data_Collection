@@ -1,4 +1,5 @@
 def metro_func():
+    print('Metro Yatırım')
     from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
     from pdfminer.pdfpage import PDFPage
     from pdfminer.converter import TextConverter
@@ -9,18 +10,35 @@ def metro_func():
     import pandas as pd
     from datetime import date
     import datetime
-    import sys
-    import csv
+    from selenium import webdriver
+    import requests
+    import json
+    from slack import WebClient
+    print('Modules imported')
 
     #GETTING PDF AS TEXT
     def download_pdf(url):
-        local_filename = url.split('/')[-1]
+        local_filename = f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/PDFs/Metro_yatırım/{url.split('/')[-1]}"
 
         with req.get(url) as r:
             with open(local_filename, 'wb') as f:
                 f.write(r.content)
 
         return  local_filename
+
+    slack_token = 'xoxb-1310569939731-1373479534900-EAQbiKWSTqT0TxoJI7EfM5TP'
+    slack_channel = '#csv'
+    slack_icon_url = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTuGqps7ZafuzUsViFGIremEL2a3NR0KO0s0RTCMXmzmREJd5m4MA&s'
+    slack_user_name = 'informer'
+    def post_message_to_slack(text, blocks=None):
+        return requests.post('https://slack.com/api/chat.postMessage', {
+            'token': slack_token,
+            'channel': slack_channel,
+            'text': text,
+            'icon_url': slack_icon_url,
+            'username': slack_user_name,
+            'blocks': json.dumps(blocks) if blocks else None
+        }).json()
 
     def pdf_to_text(path):
         manager = PDFResourceManager()
@@ -46,84 +64,168 @@ def metro_func():
     bulten = []
     today = datetime.datetime.now().date()
 
-    url_date = date.today().strftime("%d%m%Y")
-    metro_url = f"http://www.metroyatirim.com.tr/Raporlar/{url_date}_Gunluk_Bulten.pdf"
-    metro = download_pdf(metro_url)
+    option = webdriver.ChromeOptions()
+    option.add_argument("--incognito")
+    driver = webdriver.Chrome(executable_path='C:/Users/berat/webdriver/chromedriver', options=option)     ###
+    print('Webdriver is set.')
+    print('Getting to the daily news page.')
+    driver.get("http://www.metroyatirim.com.tr/Reports.aspx?Section=1")
+    link = 'http://www.metroyatirim.com.tr/Reports.aspx?Section=1'
+    print(f'Current webpage : {link}')
+    bulten_xpath = '//*[@id="ctl00_ContentPlaceHolder1_ASPxGridView1_tccell0_0"]/a'
+    top_bulten = driver.find_element_by_xpath(bulten_xpath)
+    top_bulten_txt = top_bulten.text
+    bulten_date = top_bulten_txt.split()[0]
+    tarih_check = date.today().strftime("%d.%m.%Y")
+    if bulten_date == tarih_check:
+        driver.find_element_by_xpath(bulten_xpath).click()
+        driver.switch_to.window(driver.window_handles[-1])
+        metro_url = driver.current_url
+        link = metro_url
+        print(f'Current webpage : {link}')
+        print('Downloading PDF')
+        post_message_to_slack(f"-{metro_url}")
+        metro = download_pdf(metro_url)
+        print('PDF is downloaded')
+        try:
+            pdf_file = metro
+            print('Setting the boundaries between GENEL MÜDÜRLÜK and ŞİRKET HABERLERİ')
+            sirket_haberleri_pattern = '(?<=ŞİRKET HABERLERİ).*?(?=GENEL MÜDÜRLÜK)'
+            text_list = []
+            sirket_haber_list_1 = []
+            text_list.append(pdf_to_text(pdf_file))
+            for text in text_list:
+                sirket_haber_list_1.append(re.findall(sirket_haberleri_pattern, text, re.DOTALL))
+            for k in sirket_haber_list_1:
+                whole_text = convert_list_to_string(k)
 
-    try:
-        pdf_file = f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/{metro}"
-        sirket_haberleri_pattern = '(?<=ŞİRKET HABERLERİ).*?(?=GENEL MÜDÜRLÜK)'
-        text_list = []
-        sirket_haber_list_1 = []
-        text_list.append(pdf_to_text(pdf_file))
-        for text in text_list:
-            sirket_haber_list_1.append(re.findall(sirket_haberleri_pattern, text, re.DOTALL))
-        for k in sirket_haber_list_1:
-            whole_text = convert_list_to_string(k)
+            print('Cleaning the data')
+            lines = whole_text.splitlines()
+            for line in lines:
+                if line == '' or line == ' ' or line == '  ':
+                    a = 5
+                elif line.split()[0].isupper() and line.split()[0].find(':') != -1:
+                    hisse_2nokta = line.split()[0]
+                    hisseler.append(hisse_2nokta[:-1])
+                    haberler.append(line.split(':')[1])
+                elif line.split()[0].isupper() and line.split()[0].find('-') != -1:
+                    hisse_2nokta = line.split()[0]
+                    hisseler.append(hisse_2nokta[:-1])
+                    haberler.append(line.split('-')[1])
+                elif line.split()[0].isupper() and line.find(' - ') != -1:
+                    hisseler.append(line.split(' - ')[0])
+                    haberler.append(line.split(' - ')[1])
+                elif line.split()[0].isupper() and line.find(',') != -1:
+                    hisseler.append(line.split(',')[0])
+                    haberler.append(line.split(',')[1])
+                else:
+                    eski_haber = haberler[-1]
+                    haberler = haberler[:-1]
+                    yeni_haber = line
+                    eklenecek_haber = eski_haber + yeni_haber
+                    haberler.append(eklenecek_haber)
 
-        lines = whole_text.splitlines()
-        for line in lines:
-            if line=='' or line==' ' or line=='  ':
-                a=5
-            elif line.split()[0].isupper() and line.split()[0].find(':')!=-1:
-                hisse_2nokta = line.split()[0]
-                hisseler.append(hisse_2nokta[:-1])
-                haberler.append(line.split(':')[1])
-            elif line.split()[0].isupper() and line.split()[0].find('-')!=-1:
-                hisse_2nokta = line.split()[0]
-                hisseler.append(hisse_2nokta[:-1])
-                haberler.append(line.split('-')[1])
-            elif line.split()[0].isupper() and line.find(' - ')!=-1:
-                hisseler.append(line.split(' - ')[0])
-                haberler.append(line.split(' - ')[1])
-            elif line.split()[0].isupper() and line.find(',')!=-1:
-                hisseler.append(line.split(',')[0])
-                haberler.append(line.split(',')[1])
-            else:
-                eski_haber = haberler[-1]
-                haberler = haberler[:-1]
-                yeni_haber = line
-                eklenecek_haber = eski_haber + yeni_haber
-                haberler.append(eklenecek_haber)
+            timestamp = []
+            news_id = []
+            for q in hisseler:
+                tarih.append(today)
+                bulten.append("METRO")
+                timestamp.append(datetime.datetime.today().now().time())
+                c = 0
+                news_id.append(c)
+                c = c + 1
 
-        timestamp = []
-        news_id = []
-        for q in hisseler:
-            tarih.append(today)
-            bulten.append("METRO")
-            timestamp.append(datetime.datetime.today().now().time())
-            c = 0
-            news_id.append(c)
-            c = c + 1
+            news1 = []
+            for i in range(0, len(haberler)):
+                news_pr = haberler[i].split('\n')
+                news_pr_strip = []
+                for k in range(0, len(news_pr)):
+                    news_pr_strip.append(news_pr[k].strip())
+                news1.append(" ".join(news_pr_strip))
+            haberler = news1
 
-        news1 = []
-        for i in range(0, len(haberler)):
-            news_pr = haberler[i].split('\n')
-            news_pr_strip = []
-            for k in range(0, len(news_pr)):
-                news_pr_strip.append(news_pr[k].strip())
-            news1.append(" ".join(news_pr_strip))
-        haberler = news1
+            link2 = link
+            link = []
+            for h in hisseler:
+                link.append(link2)
 
-        # CREATING DATAFRAME
-        hisseler_df = pd.DataFrame(columns=[''], data=hisseler)
-        haberler_df = pd.DataFrame(columns=[''], data=haberler)
-        tarih_df = pd.DataFrame(columns=[''], data=tarih)
-        bulten_df = pd.DataFrame(columns=[''], data=bulten)
-        timestamp_df = pd.DataFrame(columns=[''], data=timestamp)
-        stored_df = pd.concat([tarih_df, hisseler_df, haberler_df, bulten_df, timestamp_df], axis=1)
+            # CREATING DATAFRAME
+            hisseler_df = pd.DataFrame(columns=[''], data=hisseler)
+            haberler_df = pd.DataFrame(columns=[''], data=haberler)
+            tarih_df = pd.DataFrame(columns=[''], data=tarih)
+            bulten_df = pd.DataFrame(columns=[''], data=bulten)
+            timestamp_df = pd.DataFrame(columns=[''], data=timestamp)
+            stored_df = pd.concat([tarih_df, hisseler_df, haberler_df, bulten_df, timestamp_df], axis=1)
 
-        data = pd.read_csv('C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv')
-        last_row = len(data)
-        with open('C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv', 'a', encoding='utf-8', newline="") as fp:
-            wr = csv.writer(fp)
-            for i in range(0, len(hisseler)):
-                csv_list = [last_row, tarih[i], hisseler[i], haberler[i], bulten[i], timestamp[i]]
-                print(csv_list)
-                last_row = last_row + 1
-                wr.writerow(csv_list)
+            print('Writing the daily data to csv')
+            date_list = tarih
+            codes = []
+            for row in hisseler:
+                codes.append(row.strip())
+            news = haberler
+            araci_kurum = bulten
 
-        return stored_df
+            df = pd.DataFrame(list(zip(date_list, codes, news, araci_kurum, timestamp, link)))
+            df.columns = ['date_list', 'codes', 'news', 'araci_kurum', 'timestamp', 'link']
 
-    except IndexError:
-        print('Bülten düzeni farklı.')
+            df1 = df
+
+            first_row_count = df.shape[0]
+            # Hisse Sembolü kontrolü
+            df = df.rename(columns={'codes': 'ISLEM  KODU'})
+            df['ISLEM  KODU'] = df['ISLEM  KODU'].astype(str) + '.E'
+            df_bist = pd.read_csv('C:/Users/berat/Desktop/Ulakfin - Ortak Data/slack_csv/hissesembolu.csv',
+                                  delimiter=';')
+            df = pd.merge(df, df_bist, on=["ISLEM  KODU"])
+            df = df[['date_list', 'ISLEM  KODU', 'news', 'araci_kurum', 'timestamp', 'link']]
+
+            codes2 = []
+            for i in range(0, len(df['ISLEM  KODU'])):
+                codes2.append(df['ISLEM  KODU'][i].split('.E')[0])
+
+            df['ISLEM  KODU'] = codes2
+            df = df.rename(columns={'ISLEM  KODU': 'codes'})
+            second_row_count = df.shape[0]
+
+            ### NOT TAKEN NEWS
+            frames = [df1, df]
+            merged = pd.concat(frames)
+            not_taken = merged.drop_duplicates(keep=False)
+            if len(not_taken) != 0:
+                not_taken.to_csv(
+                    f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/slack_csv_folded/Metro_Yatırım/{str(datetime.datetime.now().date())}_not_taken.csv",
+                    encoding="utf-8",
+                    index=False, header=False, mode='a')
+
+                client = WebClient(token='xoxb-1310569939731-1373479534900-EAQbiKWSTqT0TxoJI7EfM5TP')
+
+                post_message_to_slack('News which are not parsed.')
+                response = client.files_upload(
+                    channels="#csv",
+                    file=f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/slack_csv_folded/Metro_Yatırım/{str(datetime.datetime.now().date())}_not_taken.csv",
+                    title=f"not taken csv file {datetime.datetime.now().date()}"
+                )
+                ###
+
+            # ID Number yazdırma
+            old_df = pd.read_csv("C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv")
+            last_id = old_df['news_id'].iloc[-1]
+            df['news_id'] = range(last_id + 1, last_id + 1 + len(df))
+            df = df[['news_id', 'date_list', 'codes', 'news', 'araci_kurum', 'timestamp', 'link']]
+
+            print(f"{second_row_count} news passed the Stock Name Test from total of {first_row_count} news.")
+            post_message_to_slack(
+                f"*Accuracy:* {second_row_count} news parsed, out of {first_row_count} news scrapped.")
+
+            print(df)
+            df.to_csv("C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv", encoding="utf-8",
+                      index=False, header=False, mode='a')
+            print('Metro Yatırım is completed')
+            return stored_df
+
+        except IndexError:
+            print('Different structure for parsing')
+            post_message_to_slack('Different structure for parsing')
+    else:
+        print('No data from Metro Yatırım Today')
+        post_message_to_slack('\n\n_No news from Metro Yatırım today_\n\n')
