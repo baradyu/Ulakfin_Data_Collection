@@ -1,4 +1,5 @@
 def halk_func():
+    print('Halk Yatırım')
     from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
     from pdfminer.pdfpage import PDFPage
     from pdfminer.converter import TextConverter
@@ -6,27 +7,59 @@ def halk_func():
     import io
     import re
     import requests as req
-    import csv
     import pandas as pd
     from selenium import webdriver
     import datetime
-    import urllib.request
+    import requests
+    import json
+    print('Modules imported')
+
+    # GETTING PDF AS TEXT
+    def download_pdf(url):
+        local_filename = f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/PDFs/Halk_yatırım/{url.split('/')[-1]}"
+
+        with req.get(url) as r:
+            with open(local_filename, 'wb') as f:
+                f.write(r.content)
+
+        return local_filename
+
+    slack_token = 'xoxb-1310569939731-1373479534900-EAQbiKWSTqT0TxoJI7EfM5TP'
+    slack_channel = '#csv'
+    slack_icon_url = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTuGqps7ZafuzUsViFGIremEL2a3NR0KO0s0RTCMXmzmREJd5m4MA&s'
+    slack_user_name = 'informer'
+    def post_message_to_slack(text, blocks=None):
+        return requests.post('https://slack.com/api/chat.postMessage', {
+            'token': slack_token,
+            'channel': slack_channel,
+            'text': text,
+            'icon_url': slack_icon_url,
+            'username': slack_user_name,
+            'blocks': json.dumps(blocks) if blocks else None
+        }).json()
 
     def convert_list_to_string(org_list, seperator=' '):
         return seperator.join(org_list)
 
     option = webdriver.ChromeOptions()
     option.add_argument("--incognito")
-    driver = webdriver.Chrome(executable_path='C:/Users/berat/webdriver/chromedriver', options=option)
+    driver = webdriver.Chrome(executable_path='C:/Users/berat/webdriver/chromedriver', options=option)      ###
+    print('Webdriver is set.')
     click_xpath = "//main/div[1]/div/main/div[2]/div[2]/div[1]/div/div[2]/a"
+    print('Getting to the daily news page.')
     driver.get("https://www.halkyatirim.com.tr/piyasa-haberleri")
+    link = 'https://www.halkyatirim.com.tr/piyasa-haberleri'
+    print(f'Current webpage : {link}')
     driver.find_element_by_xpath(click_xpath).click()
     driver.switch_to.window(driver.window_handles[-1])
     halk_url = driver.current_url
-    pdf = halk_url.split('pdf')[0][-1:-5]
-    ##
-    urllib.request.urlretrieve(halk_url, f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/PDFs/Halk_yatırım/{pdf}.pdf")
-    ##
+    link = halk_url
+    print(f'Current webpage : {link}')
+    print('Downloading PDF')
+    halk = download_pdf(halk_url)
+    print('PDF is downloaded')
+
+    post_message_to_slack(f"-{halk_url}")
     def pdf_to_text(path):
         manager = PDFResourceManager()
         retstr = io.StringIO()
@@ -41,9 +74,9 @@ def halk_func():
         device.close()
         retstr.close()
         return text
-    ##
-    pdf_file = f"C:/Users/berat/Desktop/Ulakfin - Ortak Data/PDFs/Halk_yatırım/{pdf}.pdf"
-    ##
+
+    pdf_file = halk
+    print('Setting the boundaries between Skor  Kart and Şirket Haberleri')
     sirket_haberleri_pattern = '(?<=Şirket Haberleri).*?(?=Skor  Kart:)'
     text_list = []
     sirket_haber_list_1 =[]
@@ -61,6 +94,7 @@ def halk_func():
     for k in sirket_haber_list_1:
         whole_text = convert_list_to_string(k)
 
+    print('Cleaning the data')
     para_list = whole_text.split('Skor kart için tıklayınız.')
 
     for para in para_list:
@@ -89,6 +123,10 @@ def halk_func():
     for q in hisseler:
         timestamp.append(datetime.datetime.today().now().time())
 
+    link = []
+    for h in hisseler:
+        link.append(driver.current_url)
+
     #CREATING DATAFRAME
     hisseler_df = pd.DataFrame(columns=['codes'], data=hisseler)
     haberler_df = pd.DataFrame(columns=['news'], data=haberler)
@@ -97,12 +135,44 @@ def halk_func():
     timestamp_df = pd.DataFrame(columns=['timestamp'], data=timestamp)
     stored_df = pd.concat([tarih_df, hisseler_df, haberler_df, bulten_df, timestamp_df], axis=1)
 
-    data = pd.read_csv('C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv')
-    last_row = len(data) + 1
-    with open('C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv', 'a', encoding='utf-8', newline="") as fp:
-        wr = csv.writer(fp)
-        for i in range(0, len(hisseler)):
-            csv_list = [last_row, tarih[i], hisseler[i], haberler[i], bulten[i], timestamp[i]]
-            print(csv_list)
-            last_row = last_row + 1
-            wr.writerow(csv_list)
+    print('Writing the daily data to csv')
+    date_list = tarih
+    codes = []
+    for row in hisseler:
+        codes.append(row.strip())
+    news = haberler
+    araci_kurum = bulten
+    df = pd.DataFrame(list(zip(date_list, codes, news, araci_kurum, timestamp, link)))
+    df.columns = ['date_list', 'codes', 'news', 'araci_kurum', 'timestamp', 'link']
+
+    first_row_count = df.shape[0]
+    # Hisse Sembolü kontrolü
+    df = df.rename(columns={'codes': 'ISLEM  KODU'})
+    df['ISLEM  KODU'] = df['ISLEM  KODU'].astype(str) + '.E'
+    df_bist = pd.read_csv('C:/Users/berat/Desktop/Ulakfin - Ortak Data/slack_csv/hissesembolu.csv', delimiter=';')
+    df = pd.merge(df, df_bist, on=["ISLEM  KODU"])
+    df = df[['date_list', 'ISLEM  KODU', 'news', 'araci_kurum', 'timestamp', 'link']]
+
+    codes2 = []
+    for i in range(0, len(df['ISLEM  KODU'])):
+        codes2.append(df['ISLEM  KODU'][i].split('.E')[0])
+
+    df['ISLEM  KODU'] = codes2
+    df = df.rename(columns={'ISLEM  KODU': 'codes'})
+    second_row_count = df.shape[0]
+
+    # ID Number yazdırma
+    old_df = pd.read_csv("C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv")
+    last_id = old_df['news_id'].iloc[-1]
+    df['news_id'] = range(last_id + 1, last_id + 1 + len(df))
+    df = df[['news_id', 'date_list', 'codes', 'news', 'araci_kurum', 'timestamp', 'link']]
+
+    print(f"{second_row_count} news passed the Stock Name Test from total of {first_row_count} news.")
+    post_message_to_slack(
+        f"*Accuracy:* {second_row_count} news parsed, out of {first_row_count} news scrapped.")
+
+    print(df)
+    df.to_csv("C:/Users/berat/Desktop/Ulakfin - Ortak Data/DATA_SON/sirket_haberleri.csv", encoding="utf-8",
+              index=False, header=False, mode='a')
+    print('Halk Yatırım is completed')
+    return stored_df
